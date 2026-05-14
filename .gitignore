@@ -1,0 +1,32 @@
+# Node modules
+node_modules/
+
+# Build output
+.next/
+out/
+
+# System
+.DS_Store
+*.env*.local
+
+# Capacitor native output
+android/
+ios/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor and OS stuff
+.idea/
+.vscode/
+*.swp
+
+# Misc
+*.log
+.env
+public/manifest.json
+output.json
+package-lock.json
+pnpm-lock.yaml

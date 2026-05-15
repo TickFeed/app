@@ -1,7 +1,10 @@
 name: Android APK
 
 on:
-  # Trigger manually or on a versioned tag push
+  push:
+    branches: ["master"]
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       build_type:
@@ -10,9 +13,6 @@ on:
         default: "debug"
         type: choice
         options: [debug, release]
-  push:
-    tags:
-      - "v*.*.*"
 
 jobs:
   build-apk:

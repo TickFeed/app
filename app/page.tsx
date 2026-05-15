@@ -417,7 +417,7 @@ export default function TickFeedApp() {
     currentScreen !== "add-stock"
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+    <div className="flex h-[100dvh] flex-col bg-background">
       <div className="flex-1 overflow-hidden">{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </div>

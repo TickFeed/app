@@ -50,14 +50,14 @@ jobs:
       - name: Grant Gradle execute permission
         run: chmod +x android/gradlew
 
-      # ── Debug build (no signing required) ────────────────────────────────
+      # ── Debug build — runs on push to master or manual debug trigger ─────────
       - name: Build debug APK
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_type != 'release' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.build_type == 'debug' }}
         working-directory: android
         run: ./gradlew assembleDebug
 
       - name: Upload debug APK
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_type != 'release' }}
+        if: ${{ github.event_name == 'push' || github.event.inputs.build_type == 'debug' }}
         uses: actions/upload-artifact@v4
         with:
           name: tickfeed-debug-${{ github.sha }}

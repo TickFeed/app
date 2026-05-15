@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -8,7 +8,20 @@ import { AddStockScreen } from "@/components/tickfeed/screens/add-stock-screen"
 import { ArticleDetailScreen } from "@/components/tickfeed/screens/article-detail-screen"
 import { CommunityScreen } from "@/components/tickfeed/screens/community-screen"
 import { ProfileScreen } from "@/components/tickfeed/screens/profile-screen"
+import { AuthScreen } from "@/components/tickfeed/screens/auth-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
+import {
+  clearAuthSession,
+  completeProfile,
+  loadAuthSession,
+  persistAuthSession,
+  requestOtp,
+  type AuthSession,
+  type AuthStep,
+  type NewUserProfile,
+  verifyOtp,
+} from "@/lib/auth"
+import { toast } from "@/hooks/use-toast"
 
 export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail"
 
@@ -106,6 +119,13 @@ const INITIAL_STOCKS: Stock[] = [
 ]
 
 export default function TickFeedApp() {
+  const [sessionBootstrapped, setSessionBootstrapped] = useState(false)
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null)
+  const [authStep, setAuthStep] = useState<Exclude<AuthStep, "authenticated">>("phone")
+  const [pendingPhone, setPendingPhone] = useState("")
+  const [registrationToken, setRegistrationToken] = useState<string | null>(null)
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
+
   const [currentScreen, setCurrentScreen] = useState<Screen>("home")
   const [previousScreen, setPreviousScreen] = useState<Screen>("home")
   const [activeTab, setActiveTab] = useState("home")
@@ -113,7 +133,30 @@ export default function TickFeedApp() {
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [stocks, setStocks] = useState<Stock[]>(INITIAL_STOCKS)
 
+  useEffect(() => {
+    const storedSession = loadAuthSession()
+
+    if (storedSession) {
+      setAuthSession(storedSession)
+    }
+
+    setSessionBootstrapped(true)
+  }, [])
+
+  const resetShell = () => {
+    setCurrentScreen("home")
+    setPreviousScreen("home")
+    setActiveTab("home")
+    setSelectedArticle(null)
+    setSelectedStock(null)
+  }
+
   const handleTabChange = (tab: string) => {
+    if (tab === "add") {
+      handleAddStockScreen()
+      return
+    }
+
     setActiveTab(tab)
     if (tab === "home") setCurrentScreen("home")
     else if (tab === "watchlist") setCurrentScreen("watchlist")
@@ -144,7 +187,7 @@ export default function TickFeedApp() {
   }
 
   const handleRemoveStock = (symbol: string) => {
-    setStocks(prev => prev.filter(s => s.symbol !== symbol))
+    setStocks((prev) => prev.filter((stock) => stock.symbol !== symbol))
   }
 
   const handleAddStockScreen = () => {
@@ -153,14 +196,147 @@ export default function TickFeedApp() {
   }
 
   const handleAddStock = (stock: Stock) => {
-    setStocks(prev => {
-      if (prev.some(s => s.symbol === stock.symbol)) return prev
+    setStocks((prev) => {
+      if (prev.some((existingStock) => existingStock.symbol === stock.symbol)) {
+        return prev
+      }
+
       return [...prev, stock]
     })
   }
 
   const handleBackFromAddStock = () => {
     setCurrentScreen("watchlist")
+    setActiveTab("watchlist")
+  }
+
+  const handleAuthenticated = (session: AuthSession) => {
+    persistAuthSession(session)
+    setAuthSession(session)
+    setAuthStep("phone")
+    setPendingPhone("")
+    setRegistrationToken(null)
+    resetShell()
+  }
+
+  const handleSubmitPhone = async (phone: string) => {
+    setIsAuthSubmitting(true)
+
+    try {
+      const result = await requestOtp(phone)
+      setPendingPhone(result.phone)
+      setAuthStep("otp")
+      toast({
+        title: "OTP sent",
+        description: `Use 123456 to verify +91 ${result.phone}.`,
+      })
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }
+
+  const handleSubmitOtp = async (otp: string) => {
+    setIsAuthSubmitting(true)
+
+    try {
+      const result = await verifyOtp({ phone: pendingPhone, otp })
+
+      if (result.status === "error") {
+        toast({
+          title: "Verification failed",
+          description: result.message,
+        })
+        return
+      }
+
+      if (result.status === "existing-user") {
+        handleAuthenticated(result.session)
+        toast({
+          title: `Welcome back, ${result.user.firstName}`,
+          description: "Your personalized market feed is ready.",
+        })
+        return
+      }
+
+      setPendingPhone(result.phone)
+      setRegistrationToken(result.registrationToken)
+      setAuthStep("profile")
+      toast({
+        title: "Almost done",
+        description: "Complete your profile to start using TickFeed.",
+      })
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }
+
+  const handleSubmitProfile = async (profile: NewUserProfile) => {
+    if (!registrationToken) {
+      toast({
+        title: "Session expired",
+        description: "Please verify your mobile number again.",
+      })
+      setAuthStep("phone")
+      return
+    }
+
+    setIsAuthSubmitting(true)
+
+    try {
+      const result = await completeProfile({
+        phone: pendingPhone,
+        registrationToken,
+        profile,
+      })
+
+      if (result.status === "error") {
+        toast({
+          title: "Could not complete signup",
+          description: result.message,
+        })
+        return
+      }
+
+      handleAuthenticated(result.session)
+      toast({
+        title: `Welcome to TickFeed, ${result.user.firstName}`,
+        description: "Your account is ready.",
+      })
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }
+
+  const handleResendOtp = async () => {
+    setIsAuthSubmitting(true)
+
+    try {
+      await requestOtp(pendingPhone)
+      toast({
+        title: "OTP resent",
+        description: `We sent a fresh code to +91 ${pendingPhone}.`,
+      })
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }
+
+  const handleBackToPhone = () => {
+    setAuthStep("phone")
+    setRegistrationToken(null)
+  }
+
+  const handleSignOut = () => {
+    clearAuthSession()
+    setAuthSession(null)
+    setAuthStep("phone")
+    setPendingPhone("")
+    setRegistrationToken(null)
+    resetShell()
+    toast({
+      title: "Signed out",
+      description: "You can sign back in anytime with your mobile number.",
+    })
   }
 
   const renderScreen = () => {
@@ -168,55 +344,53 @@ export default function TickFeedApp() {
       case "home":
         return <HomeScreen onNewsClick={handleNewsClick} />
       case "watchlist":
-        return (
-          <WatchlistScreen 
-            stocks={stocks}
-            onStockClick={handleStockClick}
-            onAddStock={handleAddStockScreen}
-          />
-        )
+        return <WatchlistScreen stocks={stocks} onStockClick={handleStockClick} onAddStock={handleAddStockScreen} />
       case "add-stock":
         return (
           <AddStockScreen
             onBack={handleBackFromAddStock}
             onAddStock={handleAddStock}
-            watchlistSymbols={stocks.map(s => s.symbol)}
+            watchlistSymbols={stocks.map((stock) => stock.symbol)}
           />
         )
       case "stock-detail":
-        return selectedStock ? (
-          <StockDetailScreen 
-            symbol={selectedStock} 
-            onBack={handleBackFromStock}
-            onRemove={handleRemoveStock}
-          />
-        ) : null
+        return selectedStock ? <StockDetailScreen symbol={selectedStock} onBack={handleBackFromStock} onRemove={handleRemoveStock} /> : null
       case "article-detail":
-        return selectedArticle ? (
-          <ArticleDetailScreen article={selectedArticle} onBack={handleBackFromArticle} />
-        ) : null
+        return selectedArticle ? <ArticleDetailScreen article={selectedArticle} onBack={handleBackFromArticle} /> : null
       case "community":
         return <CommunityScreen />
       case "profile":
-        return <ProfileScreen />
+        return authSession ? <ProfileScreen user={authSession.user} onSignOut={handleSignOut} /> : null
       default:
         return <HomeScreen onNewsClick={handleNewsClick} />
     }
+  }
+
+  if (!sessionBootstrapped) {
+    return <div className="flex h-[100dvh] items-center justify-center bg-background" />
+  }
+
+  if (!authSession) {
+    return (
+      <AuthScreen
+        step={authStep}
+        phone={pendingPhone}
+        isSubmitting={isAuthSubmitting}
+        onSubmitPhone={handleSubmitPhone}
+        onSubmitOtp={handleSubmitOtp}
+        onSubmitProfile={handleSubmitProfile}
+        onBackToPhone={handleBackToPhone}
+        onResendOtp={handleResendOtp}
+      />
+    )
   }
 
   const showBottomNav = currentScreen !== "article-detail" && currentScreen !== "stock-detail" && currentScreen !== "add-stock"
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background dark">
-      <div className="flex-1 overflow-hidden">
-        {renderScreen()}
-      </div>
-      {showBottomNav && (
-        <BottomNav
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-        />
-      )}
+      <div className="flex-1 overflow-hidden">{renderScreen()}</div>
+      {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </div>
   )
 }

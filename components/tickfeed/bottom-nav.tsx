@@ -18,7 +18,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
 
   return (
     <nav className="bg-card/95 backdrop-blur-xl border-t border-border sticky bottom-0 z-50">
-      <div className="flex items-center justify-around px-4 py-2">
+      <div className="flex items-center justify-around px-4 py-2 pb-3">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -28,9 +28,9 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
               >
-                <Icon className="h-6 w-6" />
+                <Icon className="h-5 w-5" />
               </button>
             )
           }
@@ -39,7 +39,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-col items-center gap-1 px-3 py-1 transition-colors ${
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
                 isActive
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"

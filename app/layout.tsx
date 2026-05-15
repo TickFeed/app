@@ -41,7 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="bg-background">
-      <body className="min-h-[100dvh] bg-background font-sans antialiased">
+      <body className="h-full bg-background font-sans antialiased">
         <Providers>
           {children}
           <Toaster />

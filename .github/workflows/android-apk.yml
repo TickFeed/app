@@ -25,7 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
 
       - uses: actions/setup-java@v4
         with:
@@ -36,7 +35,7 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Node dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build Next.js static export (for Capacitor)
         env:

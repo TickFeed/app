@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TickFeed</string>
+    <string name="title_activity_main">TickFeed</string>
+    <string name="package_name">com.tickfeed.app</string>
+    <string name="custom_url_scheme">com.tickfeed.app</string>
+</resources>

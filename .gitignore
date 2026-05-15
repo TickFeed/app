@@ -10,7 +10,6 @@ out/
 *.env*.local
 
 # Capacitor native output
-android/
 ios/
 
 # Logs

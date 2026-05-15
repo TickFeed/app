@@ -418,7 +418,9 @@ export default function TickFeedApp() {
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background">
-      <div className="flex-1 overflow-hidden">{renderScreen()}</div>
+      {/* Fills the notch / Dynamic Island area with the app background colour */}
+      <div className="fixed left-0 right-0 top-0 z-50 bg-background" style={{ height: "env(safe-area-inset-top)" }} />
+      <div className="flex-1 overflow-hidden" style={{ paddingTop: "env(safe-area-inset-top)" }}>{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </div>
   )

@@ -15,11 +15,14 @@ import {
   completeProfile,
   loadAuthSession,
   persistAuthSession,
+  pruneStaleStorage,
   requestEmailOtp,
   signInWithGoogle,
+  updateProfile,
   verifyEmailOtp,
   type AuthSession,
   type AuthStep,
+  type AuthUser,
   type NewUserProfile,
 } from "@/lib/auth"
 import { toast } from "@/hooks/use-toast"
@@ -135,6 +138,7 @@ export default function TickFeedApp() {
   const [stocks, setStocks] = useState<Stock[]>(INITIAL_STOCKS)
 
   useEffect(() => {
+    pruneStaleStorage()
     const storedSession = loadAuthSession()
     if (storedSession) setAuthSession(storedSession)
     setSessionBootstrapped(true)
@@ -319,6 +323,22 @@ export default function TickFeedApp() {
     setRegistrationToken(null)
   }
 
+  const handleUpdateUser = async (fields: { firstName?: string; lastName?: string; username?: string }) => {
+    if (!authSession) return { error: "Not authenticated" }
+    const result = await updateProfile(authSession.token, fields)
+    if ("error" in result && result.error === "session_expired") {
+      handleSignOut()
+      toast({ title: "Session expired", description: "Please sign in again." })
+      return { error: "Session expired. Please sign in again." }
+    }
+    if ("user" in result) {
+      const updatedSession = { ...authSession, user: result.user }
+      persistAuthSession(updatedSession)
+      setAuthSession(updatedSession)
+    }
+    return result
+  }
+
   const handleSignOut = () => {
     clearAuthSession()
     setAuthSession(null)
@@ -354,7 +374,9 @@ export default function TickFeedApp() {
       case "community":
         return <CommunityScreen />
       case "profile":
-        return authSession ? <ProfileScreen user={authSession.user} onSignOut={handleSignOut} /> : null
+        return authSession ? (
+          <ProfileScreen user={authSession.user} onSignOut={handleSignOut} onUpdateUser={handleUpdateUser} />
+        ) : null
       default:
         return <HomeScreen onNewsClick={handleNewsClick} />
     }

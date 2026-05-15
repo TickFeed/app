@@ -39,6 +39,20 @@ export type CompleteProfileResult =
 
 const SESSION_STORAGE_KEY = 'tickfeed-auth-session'
 
+/** Keys that are no longer used and should be pruned automatically. */
+const STALE_KEYS = ['tickfeed-registered-users', 'tickfeed-avatar-color']
+
+/** All keys owned by this app (cleared on sign-out). */
+const APP_KEYS = [SESSION_STORAGE_KEY, 'tickfeed-avatar-style']
+
+/** Call once on app boot to remove orphaned keys from old versions. */
+export function pruneStaleStorage(): void {
+  if (!canUseStorage()) return
+  for (const key of STALE_KEYS) {
+    window.localStorage.removeItem(key)
+  }
+}
+
 const API_BASE =
   typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL
     ? process.env.NEXT_PUBLIC_API_URL
@@ -64,10 +78,10 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
 function mapUser(raw: Record<string, unknown>): AuthUser {
   return {
     id: String(raw.id),
-    email: raw.email as string,
-    firstName: raw.first_name as string,
-    lastName: raw.last_name as string,
-    username: raw.username as string,
+    email: (raw.email as string) ?? "",
+    firstName: (raw.first_name as string) ?? (raw.firstName as string) ?? "",
+    lastName: (raw.last_name as string) ?? (raw.lastName as string) ?? "",
+    username: (raw.username as string) ?? "",
   }
 }
 
@@ -76,7 +90,13 @@ export function loadAuthSession(): AuthSession | null {
   const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as AuthSession
+    const session = JSON.parse(raw) as AuthSession
+    // Discard stale sessions that are missing a valid token
+    if (!session?.token || typeof session.token !== "string") {
+      window.localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+    return session
   } catch {
     window.localStorage.removeItem(SESSION_STORAGE_KEY)
     return null
@@ -90,8 +110,9 @@ export function persistAuthSession(session: AuthSession): void {
 }
 
 export function clearAuthSession(): void {
-  if (canUseStorage()) {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY)
+  if (!canUseStorage()) return
+  for (const key of APP_KEYS) {
+    window.localStorage.removeItem(key)
   }
 }
 
@@ -137,6 +158,34 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<Verify
     return { status: 'error', message: data.message ?? 'Unexpected response from server' }
   } catch (err) {
     return { status: 'error', message: err instanceof Error ? err.message : 'Verification failed' }
+  }
+}
+
+export async function updateProfile(
+  token: string,
+  fields: { firstName?: string; lastName?: string; username?: string }
+): Promise<{ user: AuthUser } | { error: string; field?: 'username' }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/profile`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        first_name: fields.firstName,
+        last_name: fields.lastName,
+        username: fields.username,
+      }),
+    })
+    if (res.status === 409) return { error: 'That username is already taken.', field: 'username' }
+    if (res.status === 401) return { error: 'session_expired' }
+    if (res.status === 503) return { error: 'Server is temporarily unavailable. Please try again.' }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      return { error: err?.detail || 'Update failed' }
+    }
+    const data = await res.json()
+    return { user: mapUser(data) }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Update failed' }
   }
 }
 

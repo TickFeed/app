@@ -82,7 +82,7 @@ export function ProfileScreen({ user, onSignOut }: ProfileScreenProps) {
               <p className="truncate text-sm text-muted-foreground">@{user.username}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">Premium</span>
-                <span className="text-xs text-muted-foreground">+91 {user.phone}</span>
+                <span className="text-xs text-muted-foreground">{user.email}</span>
               </div>
             </div>
             <button className="flex-shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">

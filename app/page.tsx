@@ -15,11 +15,12 @@ import {
   completeProfile,
   loadAuthSession,
   persistAuthSession,
-  requestOtp,
+  requestEmailOtp,
+  signInWithGoogle,
+  verifyEmailOtp,
   type AuthSession,
   type AuthStep,
   type NewUserProfile,
-  verifyOtp,
 } from "@/lib/auth"
 import { toast } from "@/hooks/use-toast"
 
@@ -121,8 +122,8 @@ const INITIAL_STOCKS: Stock[] = [
 export default function TickFeedApp() {
   const [sessionBootstrapped, setSessionBootstrapped] = useState(false)
   const [authSession, setAuthSession] = useState<AuthSession | null>(null)
-  const [authStep, setAuthStep] = useState<Exclude<AuthStep, "authenticated">>("phone")
-  const [pendingPhone, setPendingPhone] = useState("")
+  const [authStep, setAuthStep] = useState<Exclude<AuthStep, "authenticated">>("method")
+  const [pendingEmail, setPendingEmail] = useState("")
   const [registrationToken, setRegistrationToken] = useState<string | null>(null)
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false)
 
@@ -135,11 +136,7 @@ export default function TickFeedApp() {
 
   useEffect(() => {
     const storedSession = loadAuthSession()
-
-    if (storedSession) {
-      setAuthSession(storedSession)
-    }
-
+    if (storedSession) setAuthSession(storedSession)
     setSessionBootstrapped(true)
   }, [])
 
@@ -156,7 +153,6 @@ export default function TickFeedApp() {
       handleAddStockScreen()
       return
     }
-
     setActiveTab(tab)
     if (tab === "home") setCurrentScreen("home")
     else if (tab === "watchlist") setCurrentScreen("watchlist")
@@ -197,10 +193,7 @@ export default function TickFeedApp() {
 
   const handleAddStock = (stock: Stock) => {
     setStocks((prev) => {
-      if (prev.some((existingStock) => existingStock.symbol === stock.symbol)) {
-        return prev
-      }
-
+      if (prev.some((s) => s.symbol === stock.symbol)) return prev
       return [...prev, stock]
     })
   }
@@ -213,22 +206,42 @@ export default function TickFeedApp() {
   const handleAuthenticated = (session: AuthSession) => {
     persistAuthSession(session)
     setAuthSession(session)
-    setAuthStep("phone")
-    setPendingPhone("")
+    setAuthStep("method")
+    setPendingEmail("")
     setRegistrationToken(null)
     resetShell()
   }
 
-  const handleSubmitPhone = async (phone: string) => {
+  const handleGoogleSuccess = async (idToken: string) => {
     setIsAuthSubmitting(true)
-
     try {
-      const result = await requestOtp(phone)
-      setPendingPhone(result.phone)
-      setAuthStep("otp")
+      const result = await signInWithGoogle(idToken)
+      if (result.status === "error") {
+        toast({ title: "Google sign-in failed", description: result.message })
+        return
+      }
+      handleAuthenticated(result.session)
       toast({
-        title: "OTP sent",
-        description: `Use 123456 to verify +91 ${result.phone}.`,
+        title: `Welcome, ${result.user.firstName || result.user.email}`,
+        description: "Your personalized market feed is ready.",
+      })
+    } finally {
+      setIsAuthSubmitting(false)
+    }
+  }
+
+  const handleSubmitEmail = async (email: string) => {
+    setIsAuthSubmitting(true)
+    try {
+      const result = await requestEmailOtp(email)
+      setPendingEmail(result.email)
+      setAuthStep("otp")
+      toast({ title: "Code sent", description: `Check ${result.email} for your verification code.` })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ""
+      toast({
+        title: "Could not send code",
+        description: msg.includes("fetch") ? "Could not reach the server. Check your connection." : (msg || "Please try again."),
       })
     } finally {
       setIsAuthSubmitting(false)
@@ -237,15 +250,11 @@ export default function TickFeedApp() {
 
   const handleSubmitOtp = async (otp: string) => {
     setIsAuthSubmitting(true)
-
     try {
-      const result = await verifyOtp({ phone: pendingPhone, otp })
+      const result = await verifyEmailOtp(pendingEmail, otp)
 
       if (result.status === "error") {
-        toast({
-          title: "Verification failed",
-          description: result.message,
-        })
+        toast({ title: "Verification failed", description: result.message })
         return
       }
 
@@ -258,13 +267,10 @@ export default function TickFeedApp() {
         return
       }
 
-      setPendingPhone(result.phone)
+      setPendingEmail(result.email)
       setRegistrationToken(result.registrationToken)
       setAuthStep("profile")
-      toast({
-        title: "Almost done",
-        description: "Complete your profile to start using TickFeed.",
-      })
+      toast({ title: "Almost done", description: "Complete your profile to start using TickFeed." })
     } finally {
       setIsAuthSubmitting(false)
     }
@@ -272,36 +278,21 @@ export default function TickFeedApp() {
 
   const handleSubmitProfile = async (profile: NewUserProfile) => {
     if (!registrationToken) {
-      toast({
-        title: "Session expired",
-        description: "Please verify your mobile number again.",
-      })
-      setAuthStep("phone")
+      toast({ title: "Session expired", description: "Please verify your email again." })
+      setAuthStep("method")
       return
     }
-
     setIsAuthSubmitting(true)
-
     try {
-      const result = await completeProfile({
-        phone: pendingPhone,
-        registrationToken,
-        profile,
-      })
+      const result = await completeProfile({ email: pendingEmail, registrationToken, profile })
 
       if (result.status === "error") {
-        toast({
-          title: "Could not complete signup",
-          description: result.message,
-        })
+        toast({ title: "Could not complete signup", description: result.message })
         return
       }
 
       handleAuthenticated(result.session)
-      toast({
-        title: `Welcome to TickFeed, ${result.user.firstName}`,
-        description: "Your account is ready.",
-      })
+      toast({ title: `Welcome to TickFeed, ${result.user.firstName}`, description: "Your account is ready." })
     } finally {
       setIsAuthSubmitting(false)
     }
@@ -309,34 +300,33 @@ export default function TickFeedApp() {
 
   const handleResendOtp = async () => {
     setIsAuthSubmitting(true)
-
     try {
-      await requestOtp(pendingPhone)
+      await requestEmailOtp(pendingEmail)
+      toast({ title: "Code resent", description: `We sent a fresh code to ${pendingEmail}.` })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ""
       toast({
-        title: "OTP resent",
-        description: `We sent a fresh code to +91 ${pendingPhone}.`,
+        title: "Could not resend code",
+        description: msg.includes("fetch") ? "Could not reach the server." : (msg || "Please try again."),
       })
     } finally {
       setIsAuthSubmitting(false)
     }
   }
 
-  const handleBackToPhone = () => {
-    setAuthStep("phone")
+  const handleBackToMethod = () => {
+    setAuthStep("method")
     setRegistrationToken(null)
   }
 
   const handleSignOut = () => {
     clearAuthSession()
     setAuthSession(null)
-    setAuthStep("phone")
-    setPendingPhone("")
+    setAuthStep("method")
+    setPendingEmail("")
     setRegistrationToken(null)
     resetShell()
-    toast({
-      title: "Signed out",
-      description: "You can sign back in anytime with your mobile number.",
-    })
+    toast({ title: "Signed out", description: "You can sign back in anytime." })
   }
 
   const renderScreen = () => {
@@ -350,13 +340,17 @@ export default function TickFeedApp() {
           <AddStockScreen
             onBack={handleBackFromAddStock}
             onAddStock={handleAddStock}
-            watchlistSymbols={stocks.map((stock) => stock.symbol)}
+            watchlistSymbols={stocks.map((s) => s.symbol)}
           />
         )
       case "stock-detail":
-        return selectedStock ? <StockDetailScreen symbol={selectedStock} onBack={handleBackFromStock} onRemove={handleRemoveStock} /> : null
+        return selectedStock ? (
+          <StockDetailScreen symbol={selectedStock} onBack={handleBackFromStock} onRemove={handleRemoveStock} />
+        ) : null
       case "article-detail":
-        return selectedArticle ? <ArticleDetailScreen article={selectedArticle} onBack={handleBackFromArticle} /> : null
+        return selectedArticle ? (
+          <ArticleDetailScreen article={selectedArticle} onBack={handleBackFromArticle} />
+        ) : null
       case "community":
         return <CommunityScreen />
       case "profile":
@@ -374,18 +368,25 @@ export default function TickFeedApp() {
     return (
       <AuthScreen
         step={authStep}
-        phone={pendingPhone}
+        email={pendingEmail}
         isSubmitting={isAuthSubmitting}
-        onSubmitPhone={handleSubmitPhone}
+        onGoogleSuccess={handleGoogleSuccess}
+        onGoogleError={() =>
+          toast({ title: "Google sign-in failed", description: "Please try again or use email." })
+        }
+        onSubmitEmail={handleSubmitEmail}
         onSubmitOtp={handleSubmitOtp}
         onSubmitProfile={handleSubmitProfile}
-        onBackToPhone={handleBackToPhone}
+        onBackToMethod={handleBackToMethod}
         onResendOtp={handleResendOtp}
       />
     )
   }
 
-  const showBottomNav = currentScreen !== "article-detail" && currentScreen !== "stock-detail" && currentScreen !== "add-stock"
+  const showBottomNav =
+    currentScreen !== "article-detail" &&
+    currentScreen !== "stock-detail" &&
+    currentScreen !== "add-stock"
 
   return (
     <div className="flex h-[100dvh] flex-col bg-background dark">

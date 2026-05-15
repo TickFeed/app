@@ -1,0 +1,102 @@
+name: Android APK
+
+on:
+  # Trigger manually or on a versioned tag push
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Build type"
+        required: true
+        default: "debug"
+        type: choice
+        options: [debug, release]
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Build Next.js static export (for Capacitor)
+        env:
+          CAPACITOR_BUILD: "1"
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://marketsense.kanishakmittal.site' }}
+        run: npx next build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Grant Gradle execute permission
+        run: chmod +x android/gradlew
+
+      # ── Debug build (no signing required) ────────────────────────────────
+      - name: Build debug APK
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_type != 'release' }}
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Upload debug APK
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event_name == 'workflow_dispatch' && github.event.inputs.build_type != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickfeed-debug-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      # ── Release build (signed) ────────────────────────────────────────────
+      - name: Decode keystore
+        if: ${{ github.event.inputs.build_type == 'release' || startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/tickfeed-release.keystore
+
+      - name: Build release APK
+        if: ${{ github.event.inputs.build_type == 'release' || startsWith(github.ref, 'refs/tags/') }}
+        working-directory: android
+        env:
+          KEYSTORE_PATH: tickfeed-release.keystore
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
+            -Pandroid.injected.signing.store.password=$STORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+
+      - name: Upload release APK
+        if: ${{ github.event.inputs.build_type == 'release' || startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: tickfeed-release-${{ github.ref_name }}
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 90
+
+      # ── Create GitHub Release on version tags ─────────────────────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: android/app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true

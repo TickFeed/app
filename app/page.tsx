@@ -139,6 +139,12 @@ export default function TickFeedApp() {
 
   useEffect(() => {
     pruneStaleStorage()
+    const theme = localStorage.getItem("tickfeed-theme")
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark")
+    } else {
+      document.documentElement.classList.remove("dark")
+    }
     const storedSession = loadAuthSession()
     if (storedSession) setAuthSession(storedSession)
     setSessionBootstrapped(true)
@@ -411,7 +417,7 @@ export default function TickFeedApp() {
     currentScreen !== "add-stock"
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-background dark">
+    <div className="flex h-[100dvh] flex-col bg-background" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
       <div className="flex-1 overflow-hidden">{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </div>

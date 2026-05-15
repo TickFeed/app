@@ -61,7 +61,13 @@ interface ProfileScreenProps {
 }
 
 export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenProps) {
-  const [isDarkMode, setIsDarkMode] = useState(true)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("tickfeed-theme")
+      if (stored) return stored === "dark"
+    }
+    return false
+  })
   const [editOpen, setEditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [avatarStyle, setAvatarStyle] = useState(() => {
@@ -79,8 +85,10 @@ export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenPr
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add("dark")
+      localStorage.setItem("tickfeed-theme", "dark")
     } else {
       document.documentElement.classList.remove("dark")
+      localStorage.setItem("tickfeed-theme", "light")
     }
   }, [isDarkMode])
 

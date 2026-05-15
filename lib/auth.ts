@@ -43,7 +43,7 @@ const SESSION_STORAGE_KEY = 'tickfeed-auth-session'
 const STALE_KEYS = ['tickfeed-registered-users', 'tickfeed-avatar-color']
 
 /** All keys owned by this app (cleared on sign-out). */
-const APP_KEYS = [SESSION_STORAGE_KEY, 'tickfeed-avatar-style']
+const APP_KEYS = [SESSION_STORAGE_KEY, 'tickfeed-avatar-style', 'tickfeed-theme']
 
 /** Call once on app boot to remove orphaned keys from old versions. */
 export function pruneStaleStorage(): void {

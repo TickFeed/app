@@ -44,7 +44,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     source: { name: item.source, icon: sourceToIcon(item.source) },
     timestamp: formatRelativeTime(item.published ?? item.created_at),
     headline: item.title,
-    tags: item.symbol ? [item.symbol] : [],
+    tags: [],
     aiSummaryAvailable: item.priority === "HIGH",
     commentsCount: 0,
     imageUrl: item.image_url ?? "",

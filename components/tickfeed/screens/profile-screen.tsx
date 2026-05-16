@@ -61,7 +61,11 @@ interface ProfileScreenProps {
 }
 
 export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenProps) {
-  const [isDarkMode, setIsDarkMode] = useState(user.theme === "dark")
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof document !== "undefined"
+      ? document.documentElement.classList.contains("dark")
+      : user.theme === "dark"
+  )
   const [editOpen, setEditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [avatarStyle, setAvatarStyle] = useState(() => {

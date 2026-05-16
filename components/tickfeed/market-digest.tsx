@@ -122,7 +122,7 @@ export function MarketDigest({ items, headline, brief, dateLabel, indexDigests, 
     <div className="space-y-3">
       {/* ── Single digest card ─────────────────────────── */}
       <div
-        className="w-full rounded-2xl bg-zinc-800/90 px-4 py-4 select-none"
+        className="w-full rounded-2xl bg-card border border-border px-4 py-4 select-none"
         style={{ touchAction: "pan-y" }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
@@ -130,11 +130,11 @@ export function MarketDigest({ items, headline, brief, dateLabel, indexDigests, 
         {/* Fixed header */}
         <div className="flex items-start justify-between mb-3">
           <div>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400/70">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
               Market Digest
             </span>
             {dateLabel && (
-              <p className="text-[10px] text-zinc-500 mt-0.5">{dateLabel}</p>
+              <p className="text-[10px] text-muted-foreground/50 mt-0.5">{dateLabel}</p>
             )}
           </div>
           <div className="flex items-center gap-1 mt-0.5">
@@ -143,7 +143,7 @@ export function MarketDigest({ items, headline, brief, dateLabel, indexDigests, 
                 key={i}
                 onClick={() => setActive(i)}
                 className={`h-1.5 rounded-full transition-all duration-300 ${
-                  i === active ? "w-4 bg-zinc-300" : "w-1.5 bg-zinc-600"
+                  i === active ? "w-4 bg-foreground" : "w-1.5 bg-muted-foreground/30"
                 }`}
               />
             ))}
@@ -169,16 +169,16 @@ export function MarketDigest({ items, headline, brief, dateLabel, indexDigests, 
               >
                 <div className="flex-1 min-w-0">
                   {h ? (
-                    <p className="text-[17px] font-bold leading-snug text-white">{h}</p>
+                    <p className="text-[17px] font-bold leading-snug text-foreground">{h}</p>
                   ) : (
                     <div className="space-y-2">
-                      <div className="h-4 w-full rounded bg-zinc-700 animate-pulse" />
-                      <div className="h-4 w-4/5 rounded bg-zinc-700 animate-pulse" />
-                      <div className="h-4 w-3/5 rounded bg-zinc-700 animate-pulse" />
+                      <div className="h-4 w-full rounded bg-muted animate-pulse" />
+                      <div className="h-4 w-4/5 rounded bg-muted animate-pulse" />
+                      <div className="h-4 w-3/5 rounded bg-muted animate-pulse" />
                     </div>
                   )}
                   {b && (
-                    <p className="mt-2 text-[12px] leading-relaxed text-zinc-400">{b}</p>
+                    <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">{b}</p>
                   )}
                 </div>
                 <div className="shrink-0 mt-0.5">
@@ -194,9 +194,9 @@ export function MarketDigest({ items, headline, brief, dateLabel, indexDigests, 
       <div className="flex">
         {indices.map((item) => (
           <div key={item.symbol} className="flex-1 text-center">
-            <p className="text-[11px] text-zinc-500">{INDEX_LABEL[item.symbol] ?? item.symbol}</p>
-            <p className="text-sm font-bold text-white leading-tight">{item.value}</p>
-            <div className={`flex items-center justify-center gap-0.5 text-[11px] font-medium ${item.isPositive ? "text-green-400" : "text-red-400"}`}>
+            <p className="text-[11px] text-muted-foreground">{INDEX_LABEL[item.symbol] ?? item.symbol}</p>
+            <p className="text-sm font-bold text-foreground leading-tight">{item.value}</p>
+            <div className={`flex items-center justify-center gap-0.5 text-[11px] font-medium ${item.isPositive ? "text-green-500" : "text-red-500"}`}>
               {item.isPositive
                 ? <TrendingUp className="h-2.5 w-2.5" />
                 : <TrendingDown className="h-2.5 w-2.5" />}

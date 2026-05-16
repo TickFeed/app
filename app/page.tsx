@@ -122,6 +122,15 @@ const INITIAL_STOCKS: Stock[] = [
   },
 ]
 
+function applyTheme(theme: 'light' | 'dark') {
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+  localStorage.setItem('tickfeed-theme', theme)
+}
+
 export default function TickFeedApp() {
   const [sessionBootstrapped, setSessionBootstrapped] = useState(false)
   const [authSession, setAuthSession] = useState<AuthSession | null>(null)
@@ -139,14 +148,14 @@ export default function TickFeedApp() {
 
   useEffect(() => {
     pruneStaleStorage()
-    const theme = localStorage.getItem("tickfeed-theme")
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
     const storedSession = loadAuthSession()
-    if (storedSession) setAuthSession(storedSession)
+    if (storedSession) {
+      setAuthSession(storedSession)
+      applyTheme(storedSession.user.theme)
+    } else {
+      const savedTheme = localStorage.getItem("tickfeed-theme") as 'light' | 'dark' | null
+      applyTheme(savedTheme ?? 'light')
+    }
     setSessionBootstrapped(true)
   }, [])
 
@@ -216,6 +225,7 @@ export default function TickFeedApp() {
   const handleAuthenticated = (session: AuthSession) => {
     persistAuthSession(session)
     setAuthSession(session)
+    applyTheme(session.user.theme)
     setAuthStep("method")
     setPendingEmail("")
     setRegistrationToken(null)
@@ -329,7 +339,7 @@ export default function TickFeedApp() {
     setRegistrationToken(null)
   }
 
-  const handleUpdateUser = async (fields: { firstName?: string; lastName?: string; username?: string }) => {
+  const handleUpdateUser = async (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }) => {
     if (!authSession) return { error: "Not authenticated" }
     const result = await updateProfile(authSession.token, fields)
     if ("error" in result && result.error === "session_expired") {

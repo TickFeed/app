@@ -57,17 +57,11 @@ const WATCHLIST_PREVIEW = [
 interface ProfileScreenProps {
   user: AuthUser
   onSignOut: () => void
-  onUpdateUser: (fields: { firstName?: string; lastName?: string; username?: string }) => Promise<{ user: AuthUser } | { error: string; field?: "username" }>
+  onUpdateUser: (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }) => Promise<{ user: AuthUser } | { error: string; field?: "username" }>
 }
 
 export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenProps) {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("tickfeed-theme")
-      if (stored) return stored === "dark"
-    }
-    return false
-  })
+  const [isDarkMode, setIsDarkMode] = useState(user.theme === "dark")
   const [editOpen, setEditOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [avatarStyle, setAvatarStyle] = useState(() => {
@@ -82,15 +76,18 @@ export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenPr
     localStorage.setItem(AVATAR_STYLE_KEY, styleId)
   }
 
-  useEffect(() => {
-    if (isDarkMode) {
+  const handleThemeToggle = () => {
+    const next = !isDarkMode
+    setIsDarkMode(next)
+    const theme = next ? "dark" : "light"
+    if (next) {
       document.documentElement.classList.add("dark")
-      localStorage.setItem("tickfeed-theme", "dark")
     } else {
       document.documentElement.classList.remove("dark")
-      localStorage.setItem("tickfeed-theme", "light")
     }
-  }, [isDarkMode])
+    localStorage.setItem("tickfeed-theme", theme)
+    onUpdateUser({ theme })
+  }
 
   const initials = useMemo(() => {
     const f = user.firstName ?? ""
@@ -210,7 +207,7 @@ export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenPr
         {/* Dark mode toggle */}
         <div className="mx-4 mt-6">
           <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
+            onClick={handleThemeToggle}
             className="flex w-full items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:bg-muted/30"
           >
             <div className="flex items-center gap-3">

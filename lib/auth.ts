@@ -6,6 +6,7 @@ export interface AuthUser {
   firstName: string
   lastName: string
   username: string
+  theme: 'light' | 'dark'
 }
 
 export interface AuthSession {
@@ -82,6 +83,7 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
     firstName: (raw.first_name as string) ?? (raw.firstName as string) ?? "",
     lastName: (raw.last_name as string) ?? (raw.lastName as string) ?? "",
     username: (raw.username as string) ?? "",
+    theme: ((raw.theme as string) === 'dark' ? 'dark' : 'light'),
   }
 }
 
@@ -163,7 +165,7 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<Verify
 
 export async function updateProfile(
   token: string,
-  fields: { firstName?: string; lastName?: string; username?: string }
+  fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }
 ): Promise<{ user: AuthUser } | { error: string; field?: 'username' }> {
   try {
     const res = await fetch(`${API_BASE}/api/user/profile`, {
@@ -173,6 +175,7 @@ export async function updateProfile(
         first_name: fields.firstName,
         last_name: fields.lastName,
         username: fields.username,
+        theme: fields.theme,
       }),
     })
     if (res.status === 409) return { error: 'That username is already taken.', field: 'username' }

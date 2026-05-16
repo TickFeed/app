@@ -1,109 +1,118 @@
 "use client"
 
-import { useState } from "react"
-import { Search, TrendingUp, MessageSquare, ThumbsUp, Share2, Send, Heart } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Search, TrendingUp, MessageSquare, Send, Heart } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import {
+  getCommunityPosts,
+  createPost,
+  likePost,
+  unlikePost,
+  getTrendingTopics,
+  formatRelativeTime,
+  type CommunityPost,
+  type TrendingTopic,
+} from "@/lib/api"
 
-const TABS = ["Trending", "Following", "My Posts"]
-
-const DISCUSSIONS = [
-  {
-    id: "1",
-    author: {
-      name: "Rahul Sharma",
-      initials: "RS",
-      verified: true,
-    },
-    timestamp: "2h ago",
-    content: "RBI keeping rates unchanged is actually smart. With global uncertainty, they are playing it safe. What do you all think about the impact on banking stocks?",
-    tags: ["#RBI", "#Banking"],
-    likes: 234,
-    comments: 45,
-    shares: 12,
-    isLiked: false,
-  },
-  {
-    id: "2",
-    author: {
-      name: "Priya Patel",
-      initials: "PP",
-      verified: false,
-    },
-    timestamp: "4h ago",
-    content: "TCS winning the $500M deal is huge for IT sector sentiment. Expecting more deals to flow in Q2. Long on TCS and INFY",
-    tags: ["#TCS", "#ITSector"],
-    likes: 156,
-    comments: 32,
-    shares: 8,
-    isLiked: false,
-  },
-  {
-    id: "3",
-    author: {
-      name: "Amit Kumar",
-      initials: "AK",
-      verified: true,
-    },
-    timestamp: "5h ago",
-    content: "Reliance green energy push could reshape the entire energy landscape in India. $10B is no joke. This is a decade-long play.",
-    tags: ["#RELIANCE", "#GreenEnergy"],
-    likes: 312,
-    comments: 67,
-    shares: 24,
-    isLiked: false,
-  },
-  {
-    id: "4",
-    author: {
-      name: "Sneha Gupta",
-      initials: "SG",
-      verified: false,
-    },
-    timestamp: "6h ago",
-    content: "HDFC Bank Q4 results exceeded expectations. Asset quality improvement is the real story here. Management execution has been stellar.",
-    tags: ["#HDFCBANK", "#Earnings"],
-    likes: 189,
-    comments: 41,
-    shares: 15,
-    isLiked: false,
-  },
+const TABS = [
+  { label: "Trending", tab: "trending" as const },
+  { label: "Following", tab: "following" as const },
+  { label: "My Posts", tab: "mine" as const },
 ]
 
-export function CommunityScreen() {
-  const [activeTab, setActiveTab] = useState("Trending")
-  const [discussions, setDiscussions] = useState(DISCUSSIONS)
-  const [newPost, setNewPost] = useState("")
+function authorInitials(post: CommunityPost): string {
+  if (post.first_name) return (post.first_name[0] + (post.last_name?.[0] ?? "")).toUpperCase()
+  if (post.username) return post.username.slice(0, 2).toUpperCase()
+  return "??"
+}
 
-  const handleLike = (id: string) => {
-    setDiscussions(prev => prev.map(d => 
-      d.id === id 
-        ? { ...d, likes: d.isLiked ? d.likes - 1 : d.likes + 1, isLiked: !d.isLiked }
-        : d
-    ))
+function authorName(post: CommunityPost): string {
+  if (post.first_name) {
+    return [post.first_name, post.last_name].filter(Boolean).join(" ")
+  }
+  return post.username ?? "Anonymous"
+}
+
+interface CommunityScreenProps {
+  token: string
+}
+
+export function CommunityScreen({ token }: CommunityScreenProps) {
+  const [activeTab, setActiveTab] = useState(0)
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [topics, setTopics] = useState<TrendingTopic[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  const [newPost, setNewPost] = useState("")
+  const [posting, setPosting] = useState(false)
+
+  const fetchPosts = useCallback(async (tabIdx: number) => {
+    setLoading(true)
+    setError("")
+    try {
+      const result = await getCommunityPosts(token, TABS[tabIdx].tab)
+      setPosts(result)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load posts")
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  const fetchTopics = useCallback(async () => {
+    try {
+      const result = await getTrendingTopics(token)
+      setTopics(result)
+    } catch {
+      // non-critical
+    }
+  }, [token])
+
+  useEffect(() => {
+    fetchPosts(activeTab)
+    fetchTopics()
+  }, [activeTab, fetchPosts, fetchTopics])
+
+  const handleLike = async (post: CommunityPost) => {
+    const fn = post.liked_by_me ? unlikePost : likePost
+    // Optimistic update
+    setPosts((prev) =>
+      prev.map((p) =>
+        p.id === post.id
+          ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
+          : p,
+      ),
+    )
+    try {
+      const res = await fn(token, post.id)
+      setPosts((prev) =>
+        prev.map((p) => (p.id === post.id ? { ...p, likes_count: res.likes_count, liked_by_me: res.liked } : p)),
+      )
+    } catch {
+      // revert on error
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === post.id
+            ? { ...p, liked_by_me: post.liked_by_me, likes_count: post.likes_count }
+            : p,
+        ),
+      )
+    }
   }
 
-  const handlePost = () => {
-    if (!newPost.trim()) return
-    
-    const newDiscussion = {
-      id: Date.now().toString(),
-      author: {
-        name: "You",
-        initials: "YO",
-        verified: false,
-      },
-      timestamp: "Just now",
-      content: newPost,
-      tags: [],
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      isLiked: false,
+  const handlePost = async () => {
+    if (!newPost.trim() || posting) return
+    setPosting(true)
+    try {
+      const created = await createPost(token, newPost.trim())
+      setPosts((prev) => [created, ...prev])
+      setNewPost("")
+    } catch {
+      // ignore
+    } finally {
+      setPosting(false)
     }
-    
-    setDiscussions(prev => [newDiscussion, ...prev])
-    setNewPost("")
   }
 
   return (
@@ -128,18 +137,16 @@ export function CommunityScreen() {
 
       {/* Tabs */}
       <div className="flex gap-6 border-b border-border px-4">
-        {TABS.map((tab) => (
+        {TABS.map((t, i) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={t.tab}
+            onClick={() => setActiveTab(i)}
             className={`relative py-3 text-sm font-medium transition-colors ${
-              activeTab === tab
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+              activeTab === i ? "text-foreground" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {tab}
-            {activeTab === tab && (
+            {t.label}
+            {activeTab === i && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
             )}
           </button>
@@ -147,91 +154,92 @@ export function CommunityScreen() {
       </div>
 
       {/* Trending Topics */}
-      <div className="px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">Trending Topics</span>
+      {topics.length > 0 && (
+        <div className="px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">Trending Topics</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {topics.slice(0, 6).map((t) => (
+              <Badge key={t.topic} variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80">
+                #{t.topic}
+              </Badge>
+            ))}
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {["#RBIPolicy", "#TCSResults", "#NiftyAt22K", "#BankingStocks"].map((topic) => (
-            <Badge key={topic} variant="secondary" className="text-xs cursor-pointer hover:bg-secondary/80">
-              {topic}
-            </Badge>
-          ))}
-        </div>
-      </div>
+      )}
 
-      {/* Discussions List */}
+      {/* Posts */}
       <div className="flex-1 overflow-y-auto">
-        {discussions.map((discussion) => (
-          <article
-            key={discussion.id}
-            className="border-b border-border/50 p-4 hover:bg-muted/30 transition-colors"
-          >
-            {/* Author */}
-            <div className="flex items-start gap-3">
-              <Avatar className="h-10 w-10">
-                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-                  {discussion.author.initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-sm text-foreground">
-                    {discussion.author.name}
-                  </span>
-                  {discussion.author.verified && (
-                    <svg className="h-4 w-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
-                    </svg>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    {discussion.timestamp}
-                  </span>
-                </div>
-                
-                {/* Content */}
-                <p className="mt-1 text-sm text-foreground leading-relaxed">
-                  {discussion.content}
-                </p>
-                
-                {/* Tags */}
-                {discussion.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {discussion.tags.map((tag) => (
-                      <span key={tag} className="text-xs text-primary hover:underline cursor-pointer">
-                        {tag}
-                      </span>
-                    ))}
+        {loading ? (
+          <div className="divide-y divide-border/50">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-4 animate-pulse">
+                <div className="flex gap-3">
+                  <div className="h-10 w-10 rounded-full bg-muted" />
+                  <div className="flex-1">
+                    <div className="h-3 w-28 rounded bg-muted mb-2" />
+                    <div className="h-4 w-full rounded bg-muted mb-1" />
+                    <div className="h-4 w-3/4 rounded bg-muted" />
                   </div>
-                )}
-                
-                {/* Actions */}
-                <div className="mt-3 flex items-center gap-6">
-                  <button 
-                    onClick={() => handleLike(discussion.id)}
-                    className={`flex items-center gap-1.5 transition-colors ${
-                      discussion.isLiked 
-                        ? "text-loss" 
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Heart className={`h-4 w-4 ${discussion.isLiked ? "fill-current" : ""}`} />
-                    <span className="text-xs">{discussion.likes}</span>
-                  </button>
-                  <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
-                    <MessageSquare className="h-4 w-4" />
-                    <span className="text-xs">{discussion.comments}</span>
-                  </button>
-                  <button className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
-                    <Share2 className="h-4 w-4" />
-                    <span className="text-xs">{discussion.shares}</span>
-                  </button>
                 </div>
               </div>
+            ))}
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <p className="text-muted-foreground">{error}</p>
+            <button onClick={() => fetchPosts(activeTab)} className="mt-3 text-sm text-primary hover:underline">
+              Try again
+            </button>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+              <MessageSquare className="h-6 w-6 text-muted-foreground" />
             </div>
-          </article>
-        ))}
+            <p className="text-muted-foreground">No posts yet</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Be the first to share your insights</p>
+          </div>
+        ) : (
+          posts.map((post) => (
+            <article key={post.id} className="border-b border-border/50 p-4 hover:bg-muted/30 transition-colors">
+              <div className="flex items-start gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                    {authorInitials(post)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm text-foreground">{authorName(post)}</span>
+                    <span className="text-xs text-muted-foreground">{formatRelativeTime(post.created_at)}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-foreground leading-relaxed">{post.content}</p>
+                  {post.symbol && (
+                    <div className="mt-2">
+                      <span className="text-xs text-primary hover:underline cursor-pointer">
+                        #{post.symbol}
+                      </span>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center gap-6">
+                    <button
+                      onClick={() => handleLike(post)}
+                      className={`flex items-center gap-1.5 transition-colors ${
+                        post.liked_by_me ? "text-loss" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Heart className={`h-4 w-4 ${post.liked_by_me ? "fill-current" : ""}`} />
+                      <span className="text-xs">{post.likes_count}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ))
+        )}
       </div>
 
       {/* Post Input */}
@@ -247,7 +255,7 @@ export function CommunityScreen() {
           />
           <button
             onClick={handlePost}
-            disabled={!newPost.trim()}
+            disabled={!newPost.trim() || posting}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50 transition-opacity"
           >
             <Send className="h-4 w-4" />

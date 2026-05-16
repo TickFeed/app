@@ -1,142 +1,94 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Search, Bell, TrendingUp } from "lucide-react"
 import { MarketDigest } from "../market-digest"
-import { MarketTicker } from "../market-ticker"
 import { NewsCard } from "../news-card"
 import type { NewsArticle } from "@/app/page"
+import {
+  getNewsFeed,
+  getMarketDigest,
+  formatRelativeTime,
+  sourceToIcon,
+  formatPrice,
+  formatChangePct,
+  type FeedItem,
+  type MarketDigestResponse,
+} from "@/lib/api"
+import { usePolling } from "@/hooks/use-polling"
+
+const PRICE_POLL_MS = 60_000
 
 interface HomeScreenProps {
+  token: string
   onNewsClick?: (article: NewsArticle) => void
 }
 
-const TABS = ["For You", "My Stocks", "All News"]
-
-const MARKET_DATA = [
-  { symbol: "NIFTY", value: "22,327.55", change: "1.15%", isPositive: true },
-  { symbol: "SENSEX", value: "73,678.05", change: "1.24%", isPositive: true },
-  { symbol: "USD/INR", value: "83.12", change: "0.12%", isPositive: false },
+const TABS = [
+  { label: "For You", tab: "for_you" as const },
+  { label: "My Stocks", tab: "my_stocks" as const },
+  { label: "All News", tab: "all" as const },
 ]
 
-const NEWS_ITEMS: NewsArticle[] = [
-  {
-    id: "1",
-    source: { name: "The Economic Times", icon: "ET" },
-    timestamp: "20m",
-    headline: "RBI keeps rates unchanged, maintains neutral stance",
-    tags: ["RBI", "Monetary Policy"],
-    aiSummaryAvailable: true,
-    commentsCount: 126,
-    imageUrl: "/rbi-news.jpg",
-    content: "The Reserve Bank of India (RBI) has decided to keep the repo rate unchanged at 6.50% in its latest monetary policy meeting. The central bank maintained its neutral stance, focusing on managing inflation while supporting economic growth.",
-  },
-  {
-    id: "2",
-    source: { name: "Moneycontrol", icon: "M" },
-    timestamp: "45m",
-    headline: "HDFC Bank Q4 profit up 18%; asset quality improves",
-    tags: ["HDFCBANK", "Earnings"],
-    aiSummaryAvailable: true,
-    commentsCount: 89,
-    imageUrl: "/hdfc-news.jpg",
-    content: "HDFC Bank reported an 18% year-on-year rise in its Q4 net profit, driven by improved asset quality and strong loan growth. The bank's net interest income grew by 24.5% to Rs 29,077 crore.",
-  },
-  {
-    id: "3",
-    source: { name: "Business Standard", icon: "BS" },
-    timestamp: "1h",
-    headline: "TCS wins $500M deal from US-based client",
-    tags: ["TCS", "IT Sector"],
-    aiSummaryAvailable: true,
-    commentsCount: 54,
-    imageUrl: "/tcs-news.jpg",
-    content: "Tata Consultancy Services (TCS) has secured a landmark $500 million deal from a major US-based financial services client. The multi-year engagement will involve digital transformation and cloud migration services.",
-  },
-  {
-    id: "4",
-    source: { name: "LiveMint", icon: "LM" },
-    timestamp: "2h",
-    headline: "Reliance Industries plans $10B investment in green energy",
-    tags: ["RELIANCE", "Green Energy"],
-    aiSummaryAvailable: true,
-    commentsCount: 167,
-    imageUrl: "/reliance-news.jpg",
-    content: "Reliance Industries has announced plans to invest $10 billion in green energy projects over the next three years. The investment will focus on solar manufacturing, hydrogen production, and battery storage facilities.",
-  },
-]
-
-const ALL_NEWS: NewsArticle[] = [
-  ...NEWS_ITEMS,
-  {
-    id: "5",
-    source: { name: "CNBC TV18", icon: "CN" },
-    timestamp: "3h",
-    headline: "Infosys raises FY25 revenue guidance after strong Q4",
-    tags: ["INFY", "IT Sector"],
-    aiSummaryAvailable: true,
-    commentsCount: 92,
-    imageUrl: "/infosys-news.jpg",
-    content: "Infosys has raised its FY25 revenue growth guidance to 4-7% in constant currency terms after posting better-than-expected Q4 results. The company reported a 7.9% YoY growth in net profit.",
-  },
-  {
-    id: "6",
-    source: { name: "Reuters", icon: "R" },
-    timestamp: "4h",
-    headline: "Global markets rally on Fed rate cut expectations",
-    tags: ["Global", "Fed"],
-    aiSummaryAvailable: true,
-    commentsCount: 234,
-    imageUrl: "/global-news.jpg",
-    content: "Global stock markets rallied as investors grew more confident about potential Federal Reserve rate cuts later this year. The positive sentiment was driven by cooler-than-expected inflation data.",
-  },
-  {
-    id: "7",
-    source: { name: "Bloomberg", icon: "B" },
-    timestamp: "5h",
-    headline: "Adani Group stocks surge after Supreme Court ruling",
-    tags: ["ADANI", "Legal"],
-    aiSummaryAvailable: true,
-    commentsCount: 312,
-    imageUrl: "/adani-news.jpg",
-    content: "Adani Group stocks surged across the board following a favorable Supreme Court ruling. The court dismissed petitions seeking an independent probe into the Hindenburg allegations.",
-  },
-  {
-    id: "8",
-    source: { name: "ET Now", icon: "ET" },
-    timestamp: "6h",
-    headline: "Auto sector outlook positive as rural demand recovers",
-    tags: ["Auto", "Rural"],
-    aiSummaryAvailable: true,
-    commentsCount: 78,
-    imageUrl: "/auto-news.jpg",
-    content: "The auto sector outlook remains positive as rural demand shows signs of recovery. Two-wheeler and tractor sales are expected to grow by 8-10% in the coming quarter.",
-  },
-]
-
-const MY_STOCKS_NEWS: NewsArticle[] = [
-  NEWS_ITEMS[1], // HDFC
-  NEWS_ITEMS[2], // TCS
-  NEWS_ITEMS[3], // Reliance
-]
-
-export function HomeScreen({ onNewsClick }: HomeScreenProps) {
-  const [activeTab, setActiveTab] = useState("For You")
-
-  const getNewsForTab = () => {
-    switch (activeTab) {
-      case "For You":
-        return NEWS_ITEMS
-      case "My Stocks":
-        return MY_STOCKS_NEWS
-      case "All News":
-        return ALL_NEWS
-      default:
-        return NEWS_ITEMS
-    }
+function feedItemToArticle(item: FeedItem): NewsArticle {
+  return {
+    id: String(item.id),
+    url: item.url,
+    source: { name: item.source, icon: sourceToIcon(item.source) },
+    timestamp: formatRelativeTime(item.published ?? item.created_at),
+    headline: item.title,
+    tags: item.symbol ? [item.symbol] : [],
+    aiSummaryAvailable: item.priority === "HIGH",
+    commentsCount: 0,
+    imageUrl: "",
+    content: item.summary ?? undefined,
   }
+}
 
-  const currentNews = getNewsForTab()
+export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
+  const [activeTab, setActiveTab] = useState(0)
+  const [news, setNews] = useState<NewsArticle[]>([])
+  const [digest, setDigest] = useState<MarketDigestResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+
+  const fetchFeed = useCallback(async (tabIdx: number) => {
+    setLoading(true)
+    setError("")
+    try {
+      const tab = TABS[tabIdx].tab
+      const items = await getNewsFeed(token, tab)
+      setNews(items.map(feedItemToArticle))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load news")
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
+  const fetchDigest = useCallback(async () => {
+    try {
+      const d = await getMarketDigest(token)
+      setDigest(d)
+    } catch {
+      // digest is non-critical — silently ignore
+    }
+  }, [token])
+
+  useEffect(() => {
+    fetchFeed(activeTab)
+    if (activeTab === 0) fetchDigest()
+  }, [activeTab, fetchFeed, fetchDigest])
+
+  // Silently refresh market ticker every 60 s while on the For You tab
+  usePolling(fetchDigest, PRICE_POLL_MS, activeTab === 0)
+
+  const tickerItems = (digest?.market_ticker ?? []).map((t) => ({
+    symbol: t.symbol,
+    value: formatPrice(t.price),
+    change: formatChangePct(t.change_pct),
+    isPositive: t.is_positive,
+  }))
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -159,57 +111,48 @@ export function HomeScreen({ onNewsClick }: HomeScreenProps) {
 
       {/* Tabs */}
       <div className="flex gap-1 px-4 pb-3 overflow-x-auto scrollbar-hide">
-        {TABS.map((tab) => (
+        {TABS.map((t, i) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
+            key={t.tab}
+            onClick={() => setActiveTab(i)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === tab
+              activeTab === i
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
-            {tab}
+            {t.label}
           </button>
         ))}
       </div>
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto pb-4">
-        {/* Market Digest - only show on For You */}
-        {activeTab === "For You" && (
-          <>
-            <div className="px-4 pb-4">
-              <MarketDigest
-                headline="Sensex rises 1.2% as banking & IT stocks lead broad-based rally"
-                subtext="Nifty reclaims 22,300. Positive global cues and strong FII inflows boost sentiment."
-                date="8 May, 8:30 AM"
-              />
-            </div>
-            <div className="px-4 pb-4">
-              <MarketTicker items={MARKET_DATA} />
-            </div>
-          </>
+        {/* Market Digest — For You only */}
+        {activeTab === 0 && tickerItems.length > 0 && (
+          <div className="px-4 pb-4">
+            <MarketDigest items={tickerItems} brief={digest?.market_brief} />
+          </div>
         )}
 
-        {/* Section Header */}
+        {/* News section */}
         <div className="border-t border-border/50">
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
               <h2 className="font-semibold text-foreground">
-                {activeTab === "For You" && "Top News"}
-                {activeTab === "My Stocks" && "Your Stock Updates"}
-                {activeTab === "All News" && "Latest News"}
+                {activeTab === 0 && "Top News"}
+                {activeTab === 1 && "Your Stock Updates"}
+                {activeTab === 2 && "Latest News"}
               </h2>
-              {activeTab === "All News" && (
+              {activeTab === 2 && !loading && (
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                  {currentNews.length} articles
+                  {news.length} articles
                 </span>
               )}
             </div>
-            {activeTab !== "All News" && (
-              <button 
-                onClick={() => setActiveTab("All News")}
+            {activeTab !== 2 && (
+              <button
+                onClick={() => setActiveTab(2)}
                 className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
               >
                 View all
@@ -218,10 +161,32 @@ export function HomeScreen({ onNewsClick }: HomeScreenProps) {
             )}
           </div>
 
-          {/* News List */}
-          <div>
-            {currentNews.length > 0 ? (
-              currentNews.map((item) => (
+          {loading ? (
+            <div className="space-y-0">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="px-4 py-4 border-b border-border/50 animate-pulse">
+                  <div className="flex gap-2 mb-2">
+                    <div className="h-3 w-20 rounded bg-muted" />
+                    <div className="h-3 w-12 rounded bg-muted" />
+                  </div>
+                  <div className="h-4 w-full rounded bg-muted mb-1" />
+                  <div className="h-4 w-3/4 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <p className="text-muted-foreground">{error}</p>
+              <button
+                onClick={() => fetchFeed(activeTab)}
+                className="mt-3 text-sm text-primary hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : news.length > 0 ? (
+            <div>
+              {news.map((item) => (
                 <NewsCard
                   key={item.id}
                   source={item.source}
@@ -233,19 +198,17 @@ export function HomeScreen({ onNewsClick }: HomeScreenProps) {
                   imageUrl={item.imageUrl}
                   onClick={() => onNewsClick?.(item)}
                 />
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                  <TrendingUp className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <p className="text-muted-foreground">No news available</p>
-                <p className="text-sm text-muted-foreground/70 mt-1">
-                  Check back later for updates
-                </p>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                <TrendingUp className="h-6 w-6 text-muted-foreground" />
               </div>
-            )}
-          </div>
+              <p className="text-muted-foreground">No news available</p>
+              <p className="text-sm text-muted-foreground/70 mt-1">Check back later for updates</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

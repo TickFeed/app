@@ -1,77 +1,67 @@
 "use client"
 
-interface MarketDigestProps {
-  headline: string
-  subtext: string
-  date: string
-  chartData?: number[]
+import { TrendingUp, TrendingDown } from "lucide-react"
+
+interface TickerItem {
+  symbol: string
+  value: string
+  change: string
+  isPositive: boolean
 }
 
-export function MarketDigest({ headline, subtext, date, chartData }: MarketDigestProps) {
-  // Generate chart path
-  const data = chartData || [40, 45, 42, 48, 55, 52, 58, 62, 60, 65, 70, 68, 72, 78, 80]
-  const width = 260
-  const height = 80
-  const min = Math.min(...data)
-  const max = Math.max(...data)
-  const range = max - min || 1
+interface MarketDigestProps {
+  items: TickerItem[]
+  brief?: string | null
+  label?: string
+}
 
-  const points = data.map((value, index) => {
-    const x = (index / (data.length - 1)) * width
-    const y = height - ((value - min) / range) * height * 0.8 - 8
-    return `${x},${y}`
-  }).join(" ")
+export function MarketDigest({ items, brief, label = "Market at a Glance" }: MarketDigestProps) {
+  if (items.length === 0) return null
 
-  // Create gradient area
-  const areaPath = `M0,${height} L${points.split(" ").map(p => p).join(" L")} L${width},${height} Z`
+  const primary = items.slice(0, 2)
+  const secondary = items.slice(2)
 
   return (
-    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-800/90 to-zinc-900/95 p-4">
-      {/* Background gradient accent */}
-      <div className="absolute -right-20 -top-20 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
-      
-      <div className="relative">
-        {/* Header */}
-        <div className="mb-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            MARKET DIGEST
-          </span>
-          <p className="text-xs text-zinc-500">{date}</p>
-        </div>
+    <div className="rounded-xl bg-gradient-to-br from-zinc-800/90 to-zinc-900/95 px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 mb-2">
+        {label}
+      </p>
 
-        {/* Content with chart */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 pt-2">
-            <h3 className="text-xl font-bold leading-tight text-white">
-              {headline}
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-zinc-400">
-              {subtext}
-            </p>
+      {/* Primary indices */}
+      <div className="flex gap-4 mb-2">
+        {primary.map((item) => (
+          <div key={item.symbol} className="flex-1">
+            <p className="text-[11px] text-zinc-400 truncate">{item.symbol}</p>
+            <p className="text-base font-bold text-white leading-tight">{item.value}</p>
+            <div className={`flex items-center gap-0.5 text-xs font-medium ${item.isPositive ? "text-gain" : "text-loss"}`}>
+              {item.isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {item.isPositive ? "+" : ""}{item.change}
+            </div>
           </div>
-
-          {/* Chart */}
-          <div className="flex-shrink-0">
-            <svg width={width * 0.5} height={height} viewBox={`0 0 ${width} ${height}`} className="opacity-80">
-              <defs>
-                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--gain)" stopOpacity="0.3" />
-                  <stop offset="100%" stopColor="var(--gain)" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path d={areaPath} fill="url(#chartGradient)" />
-              <polyline
-                points={points}
-                fill="none"
-                stroke="var(--gain)"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        </div>
+        ))}
       </div>
+
+      {/* Secondary indices */}
+      {secondary.length > 0 && (
+        <div className="flex gap-4 pt-2 border-t border-zinc-700/50">
+          {secondary.map((item) => (
+            <div key={item.symbol} className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 truncate max-w-[70px]">{item.symbol}</span>
+              <span className="text-xs font-semibold text-zinc-300">{item.value}</span>
+              <span className={`text-[10px] font-medium ${item.isPositive ? "text-gain" : "text-loss"}`}>
+                {item.isPositive ? "+" : ""}{item.change}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* AI market brief */}
+      {brief && (
+        <p className="mt-2 pt-2 border-t border-zinc-700/50 text-[11px] leading-relaxed text-zinc-400">
+          {brief}
+        </p>
+      )}
     </div>
   )
 }

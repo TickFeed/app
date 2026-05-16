@@ -15,6 +15,7 @@ import {
   type StockSearchResult,
   type TrendingStockItem,
 } from "@/lib/api"
+import { invalidateMyStocksCache } from "./home-screen"
 
 interface AddStockScreenProps {
   token: string
@@ -74,19 +75,30 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
   }, [searchQuery, token])
 
   const handleToggle = useCallback(async (symbol: string) => {
+    const wasAdded = watchlistSymbols.has(symbol)
+    // Optimistic update — flip immediately so the tick/plus changes at once
+    setWatchlistSymbols((prev) => {
+      const s = new Set(prev)
+      wasAdded ? s.delete(symbol) : s.add(symbol)
+      return s
+    })
     setPendingSymbol(symbol)
     try {
-      if (watchlistSymbols.has(symbol)) {
+      if (wasAdded) {
         await removeFromWatchlist(token, symbol)
-        setWatchlistSymbols((prev) => { const s = new Set(prev); s.delete(symbol); return s })
       } else {
         await addToWatchlist(token, symbol)
-        setWatchlistSymbols((prev) => new Set([...prev, symbol]))
       }
     } catch {
-      // ignore conflict errors (already in watchlist)
+      // Revert optimistic update on failure
+      setWatchlistSymbols((prev) => {
+        const s = new Set(prev)
+        wasAdded ? s.add(symbol) : s.delete(symbol)
+        return s
+      })
     } finally {
       setPendingSymbol(null)
+      invalidateMyStocksCache()
     }
   }, [token, watchlistSymbols])
 

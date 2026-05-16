@@ -1,6 +1,6 @@
 "use client"
 
-import { Sparkles, Bookmark, MessageSquare } from "lucide-react"
+import { Sparkles, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import { Badge } from "@/components/ui/badge"
 
@@ -82,7 +82,7 @@ export function NewsCard({
         </div>
 
         {/* Thumbnail — always shown with fallback */}
-        <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-muted">
+        <div className="relative h-16 w-16 flex-shrink-0 self-center overflow-hidden rounded-lg bg-muted">
           {imageUrl ? (
             <Image src={imageUrl} alt="" fill className="object-cover" />
           ) : (
@@ -93,16 +93,6 @@ export function NewsCard({
             </div>
           )}
         </div>
-
-        {/* Bookmark */}
-        <button 
-          className="flex-shrink-0 p-1 text-muted-foreground hover:text-foreground transition-colors"
-          onClick={(e) => {
-            e.stopPropagation()
-          }}
-        >
-          <Bookmark className="h-4 w-4" />
-        </button>
       </div>
     </article>
   )

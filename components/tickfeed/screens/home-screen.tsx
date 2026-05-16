@@ -37,6 +37,10 @@ const _CACHE_VER = 2
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
+export function invalidateMyStocksCache() {
+  delete _feedCache[`${_CACHE_VER}:1`]
+}
+
 function feedItemToArticle(item: FeedItem): NewsArticle {
   return {
     id: String(item.id),

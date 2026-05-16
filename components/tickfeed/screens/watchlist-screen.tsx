@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Plus, SlidersHorizontal, Search, TrendingUp, TrendingDown } from "lucide-react"
+import { Plus, Pencil, Search, TrendingUp, TrendingDown, Trash2, CheckCircle2, Circle } from "lucide-react"
 import { StockCard } from "../stock-card"
 import {
   getWatchlist,
+  removeFromWatchlist,
   formatPrice,
   formatChangePct,
   symbolToName,
@@ -12,7 +13,8 @@ import {
   symbolToLogo,
   type WatchlistItem,
 } from "@/lib/api"
-import { usePriceStream, type PriceQuote } from "@/hooks/use-price-stream"
+import { invalidateMyStocksCache } from "./home-screen"
+import { usePriceStream } from "@/hooks/use-price-stream"
 
 interface DisplayStock {
   symbol: string
@@ -50,6 +52,9 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
+  const [editMode, setEditMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [removing, setRemoving] = useState(false)
 
   // Load watchlist structure (symbols + names) once on mount
   const fetchWatchlist = useCallback(async () => {
@@ -113,21 +118,64 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
   const totalGainers = stocks.filter((s) => s.isPositive).length
   const totalLosers = stocks.filter((s) => !s.isPositive).length
 
+  const enterEdit = () => { setEditMode(true); setSelected(new Set()) }
+  const exitEdit  = () => { setEditMode(false); setSelected(new Set()) }
+
+  const toggleSelect = (symbol: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(symbol) ? next.delete(symbol) : next.add(symbol)
+      return next
+    })
+  }
+
+  const handleRemove = async () => {
+    if (selected.size === 0) return
+    setRemoving(true)
+    try {
+      await Promise.all([...selected].map((sym) => removeFromWatchlist(token, sym)))
+      setStocks((prev) => prev.filter((s) => !selected.has(s.symbol)))
+      setSymbols((prev) => prev.filter((s) => !selected.has(s)))
+      invalidateMyStocksCache()
+      exitEdit()
+    } finally {
+      setRemoving(false)
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
       <header className="flex items-center justify-between px-4 pb-2 pt-4 bg-background sticky top-0 z-10">
-        <h1 className="text-2xl font-bold text-foreground">My Stocks</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {editMode ? "Select Stocks" : "My Stocks"}
+        </h1>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onAddStock}
-            className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-          <button className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-            <SlidersHorizontal className="h-5 w-5" />
-          </button>
+          {editMode ? (
+            <button
+              onClick={exitEdit}
+              className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={onAddStock}
+                className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              {stocks.length > 0 && (
+                <button
+                  onClick={enterEdit}
+                  className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Pencil className="h-5 w-5" />
+                </button>
+              )}
+            </>
+          )}
         </div>
       </header>
 
@@ -202,19 +250,32 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
           </div>
         ) : filteredStocks.length > 0 ? (
           filteredStocks.map((stock) => (
-            <StockCard
-              key={stock.symbol}
-              symbol={stock.symbol}
-              name={stock.name}
-              price={stock.price}
-              change={stock.change}
-              isPositive={stock.isPositive}
-              updatesCount={0}
-              chartData={stock.chartData}
-              logo={stock.logo}
-              logoColor={stock.logoColor}
-              onClick={() => onStockClick?.(stock.symbol)}
-            />
+            <div key={stock.symbol} className="relative flex items-center">
+              {editMode && (
+                <button
+                  onClick={() => toggleSelect(stock.symbol)}
+                  className="absolute left-4 z-10 flex-shrink-0"
+                >
+                  {selected.has(stock.symbol)
+                    ? <CheckCircle2 className="h-5 w-5 text-primary" />
+                    : <Circle className="h-5 w-5 text-muted-foreground/50" />}
+                </button>
+              )}
+              <div className={`flex-1 ${editMode ? "pl-8" : ""} ${editMode && selected.has(stock.symbol) ? "bg-primary/5" : ""}`}>
+                <StockCard
+                  symbol={stock.symbol}
+                  name={stock.name}
+                  price={stock.price}
+                  change={stock.change}
+                  isPositive={stock.isPositive}
+                  updatesCount={0}
+                  chartData={stock.chartData}
+                  logo={stock.logo}
+                  logoColor={stock.logoColor}
+                  onClick={() => editMode ? toggleSelect(stock.symbol) : onStockClick?.(stock.symbol)}
+                />
+              </div>
+            </div>
           ))
         ) : stocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -242,6 +303,25 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
           </div>
         )}
       </div>
+
+      {/* Remove bar — shown in edit mode */}
+      {editMode && (
+        <div className="px-4 py-3 border-t border-border bg-background">
+          <button
+            onClick={handleRemove}
+            disabled={selected.size === 0 || removing}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors disabled:opacity-40
+              bg-destructive/10 text-destructive border border-destructive/30 hover:bg-destructive/20 disabled:hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4" />
+            {removing
+              ? "Removing…"
+              : selected.size === 0
+              ? "Select stocks to remove"
+              : `Remove ${selected.size} stock${selected.size > 1 ? "s" : ""}`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

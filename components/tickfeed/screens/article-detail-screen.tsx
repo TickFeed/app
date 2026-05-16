@@ -12,6 +12,8 @@ import {
   Send,
   Bot,
   User,
+  MessageSquare,
+  Heart,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -21,7 +23,12 @@ import {
   getArticleSummary,
   chatAboutArticle,
   toggleBookmark,
+  getCommunityPosts,
+  createPost,
+  likePost,
+  unlikePost,
   type ArticleSummary,
+  type CommunityPost,
 } from "@/lib/api"
 
 interface ArticleDetailScreenProps {
@@ -30,7 +37,7 @@ interface ArticleDetailScreenProps {
   onBack?: () => void
 }
 
-type TabType = "ai-summary" | "ai-chat"
+type TabType = "ai-summary" | "ai-chat" | "discussions"
 
 interface ChatMessage {
   id: string
@@ -63,6 +70,13 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
+  // Discussions state
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [postsLoading, setPostsLoading] = useState(false)
+  const postsFetched = useRef(false)
+  const [postInput, setPostInput] = useState("")
+  const [posting, setPosting] = useState(false)
+
   // Fetch article detail for bookmarked status
   useEffect(() => {
     if (isNaN(numericId)) return
@@ -91,6 +105,55 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
   useEffect(() => {
     if (activeTab === "ai-summary") fetchSummary()
   }, [activeTab, fetchSummary])
+
+  const fetchPosts = useCallback(async () => {
+    if (postsFetched.current) return
+    postsFetched.current = true
+    setPostsLoading(true)
+    try {
+      const data = await getCommunityPosts(token, "trending")
+      setPosts(data)
+    } catch {
+      // non-critical
+    } finally {
+      setPostsLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (activeTab === "discussions") fetchPosts()
+  }, [activeTab, fetchPosts])
+
+  const handlePostSubmit = async () => {
+    if (!postInput.trim() || posting) return
+    const content = postInput.trim()
+    setPostInput("")
+    setPosting(true)
+    try {
+      const symbol = article.tags[0] ?? null
+      const newPost = await createPost(token, content, symbol ?? undefined)
+      setPosts((prev) => [newPost, ...prev])
+    } catch {
+      // ignore
+    } finally {
+      setPosting(false)
+    }
+  }
+
+  const handleLike = async (post: CommunityPost) => {
+    const optimistic = posts.map((p) =>
+      p.id === post.id
+        ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
+        : p
+    )
+    setPosts(optimistic)
+    try {
+      if (post.liked_by_me) await unlikePost(token, post.id)
+      else await likePost(token, post.id)
+    } catch {
+      setPosts(posts) // revert
+    }
+  }
 
   useEffect(() => {
     if (activeTab === "ai-chat") {
@@ -142,8 +205,9 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
   }
 
   const tabs = [
-    { id: "ai-summary" as TabType, label: "AI Summary", icon: Sparkles },
-    { id: "ai-chat" as TabType, label: "Ask AI", icon: Bot },
+    { id: "ai-summary" as TabType, label: "AI Summary", icon: Sparkles, count: null },
+    { id: "ai-chat" as TabType, label: "Ask AI", icon: Bot, count: null },
+    { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: posts.length > 0 ? posts.length : null },
   ]
 
   return (
@@ -199,12 +263,17 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors relative ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-sm font-medium transition-colors relative ${
               activeTab === tab.id ? "text-primary" : "text-muted-foreground hover:text-foreground"
             }`}
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
+            {tab.count != null && (
+              <span className="ml-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary leading-none">
+                {tab.count}
+              </span>
+            )}
             {activeTab === tab.id && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
             )}
@@ -337,6 +406,105 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === "discussions" && (
+          <div className="flex flex-col h-full">
+            {/* Article context chip */}
+            <div className="px-4 pt-3 pb-2">
+              <p className="text-xs text-muted-foreground line-clamp-2 italic">"{article.headline}"</p>
+            </div>
+
+            {/* Post compose */}
+            <div className="px-4 pb-3 border-b border-border">
+              <div className="flex gap-2 items-end">
+                <textarea
+                  value={postInput}
+                  onChange={(e) => setPostInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && e.metaKey && handlePostSubmit()}
+                  placeholder="What's your take on this? How does it affect the market?"
+                  rows={2}
+                  className="flex-1 resize-none rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <button
+                  onClick={handlePostSubmit}
+                  disabled={!postInput.trim() || posting}
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+              {article.tags[0] && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                  Tagged as <span className="font-medium text-primary">{article.tags[0]}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Posts list */}
+            <div className="flex-1 overflow-y-auto pb-4">
+              {postsLoading ? (
+                <div className="space-y-4 px-4 pt-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse flex gap-3">
+                      <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-24 rounded bg-muted" />
+                        <div className="h-3 w-full rounded bg-muted" />
+                        <div className="h-3 w-2/3 rounded bg-muted" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : posts.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <MessageSquare className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="font-medium text-foreground text-sm">Start the conversation</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">Share your perspective on this news</p>
+                </div>
+              ) : (
+                <>
+                  <p className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {posts.length} {posts.length === 1 ? "comment" : "comments"}
+                  </p>
+                  {posts.map((post) => {
+                    const name = [post.first_name, post.last_name].filter(Boolean).join(" ") || post.username || "User"
+                    const initials = name.slice(0, 2).toUpperCase()
+                    const mins = Math.floor((Date.now() - new Date(post.created_at).getTime()) / 60000)
+                    const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`
+                    return (
+                      <div key={post.id} className="px-4 py-3 border-b border-border/50">
+                        <div className="flex gap-3">
+                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
+                            {initials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm font-medium text-foreground">{name}</span>
+                              {post.symbol && (
+                                <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{post.symbol}</span>
+                              )}
+                              <span className="text-xs text-muted-foreground ml-auto">{timeAgo}</span>
+                            </div>
+                            <p className="text-sm text-foreground/90 leading-relaxed">{post.content}</p>
+                            <button
+                              onClick={() => handleLike(post)}
+                              className={`mt-2 flex items-center gap-1 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+                            >
+                              <Heart className={`h-3.5 w-3.5 ${post.liked_by_me ? "fill-current" : ""}`} />
+                              {post.likes_count > 0 && <span>{post.likes_count}</span>}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+            </div>
           </div>
         )}
 

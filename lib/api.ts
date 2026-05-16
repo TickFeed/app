@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
 // ── Core fetchers ─────────────────────────────────────────────────────────────
 
@@ -309,14 +309,6 @@ export async function getArticleDetail(token: string, id: number): Promise<Artic
 
 export async function getArticleSummary(token: string, id: number): Promise<ArticleSummary> {
   return apiGet(`/api/news/${id}/summary`, token)
-}
-
-export async function chatAboutArticle(
-  token: string,
-  id: number,
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-): Promise<{ reply: string }> {
-  return apiPost(`/api/news/${id}/chat`, token, { messages })
 }
 
 export async function toggleBookmark(

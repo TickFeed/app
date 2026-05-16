@@ -27,6 +27,7 @@ import {
   createPost,
   likePost,
   unlikePost,
+  API_BASE,
   type ArticleSummary,
   type CommunityPost,
 } from "@/lib/api"
@@ -43,6 +44,7 @@ interface ChatMessage {
   id: string
   role: "user" | "assistant"
   content: string
+  events?: string[]
 }
 
 export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScreenProps) {
@@ -167,25 +169,61 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
     setInputValue("")
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content }
-    setChatMessages((prev) => [...prev, userMsg])
+    const aiMsgId = (Date.now() + 1).toString()
+    const aiMsg: ChatMessage = { id: aiMsgId, role: "assistant", content: "", events: [] }
+    
+    setChatMessages((prev) => [...prev, userMsg, aiMsg])
     setChatLoading(true)
 
     try {
       const history = [...chatMessages, userMsg].map((m) => ({ role: m.role, content: m.content }))
-      const res = await chatAboutArticle(token, numericId, history)
-      const aiMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: res.reply,
+      
+      const res = await fetch(`${API_BASE}/api/news/${numericId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({ messages: history })
+      })
+
+      if (!res.ok) throw new Error("Failed to chat")
+      if (!res.body) throw new Error("No response body")
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let done = false
+      let buffer = ""
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read()
+        done = doneReading
+        if (value) {
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split("\n\n")
+          buffer = parts.pop() || "" 
+          
+          for (const part of parts) {
+            if (part.startsWith("data: ")) {
+              const dataStr = part.slice(6)
+              try {
+                const data = JSON.parse(dataStr)
+                if (data.type === "chunk") {
+                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content + data.content } : m))
+                } else if (data.type === "event") {
+                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, events: [...(m.events || []), data.message] } : m))
+                } else if (data.type === "error") {
+                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content + "\n\nError: " + data.content } : m))
+                }
+              } catch (e) {
+                // Ignore parse errors from keepalive or malformed chunks
+              }
+            }
+          }
+        }
       }
-      setChatMessages((prev) => [...prev, aiMsg])
     } catch (e) {
-      const errMsg: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: e instanceof Error ? e.message : "Sorry, something went wrong. Try again.",
-      }
-      setChatMessages((prev) => [...prev, errMsg])
+      setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content || "Sorry, something went wrong. Try again." } : m))
     } finally {
       setChatLoading(false)
     }
@@ -528,32 +566,39 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                     )}
                   </div>
                   <div className={`flex-1 max-w-[80%] ${message.role === "user" ? "text-right" : ""}`}>
-                    <div
-                      className={`inline-block rounded-2xl px-4 py-2.5 text-sm ${
-                        message.role === "assistant"
-                          ? "bg-muted text-foreground rounded-tl-none"
-                          : "bg-primary text-primary-foreground rounded-tr-none"
-                      }`}
-                    >
-                      {message.content}
-                    </div>
+                    {message.role === "assistant" && message.events && message.events.length > 0 && (
+                      <div className="flex flex-col gap-1.5 mb-2">
+                        {message.events.map((evt, idx) => (
+                          <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/40 w-fit px-2.5 py-1 rounded-full border border-border/40">
+                            <Sparkles className="h-3 w-3 text-primary animate-pulse" />
+                            {evt}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(message.content || message.role === "user") && (
+                      <div
+                        className={`inline-block rounded-2xl px-4 py-2.5 text-sm ${
+                          message.role === "assistant"
+                            ? "bg-muted text-foreground rounded-tl-none"
+                            : "bg-primary text-primary-foreground rounded-tr-none"
+                        }`}
+                      >
+                        {message.content}
+                      </div>
+                    )}
+                    {message.role === "assistant" && !message.content && chatLoading && (
+                      <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-3 w-fit">
+                        <div className="flex gap-1">
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.15s]" />
+                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
-              {chatLoading && (
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 flex-shrink-0">
-                    <Bot className="h-4 w-4 text-primary" />
-                  </div>
-                  <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-3">
-                    <div className="flex gap-1">
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" />
-                    </div>
-                  </div>
-                </div>
-              )}
               <div ref={chatEndRef} />
             </div>
 

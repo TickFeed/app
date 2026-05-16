@@ -28,6 +28,7 @@ import {
   type StockDetail,
   type ChartPoint,
 } from "@/lib/api"
+import { usePriceStream } from "@/hooks/use-price-stream"
 
 const TIME_RANGES = ["1D", "1W", "1M", "3M", "1Y"] as const
 type TimeRange = (typeof TIME_RANGES)[number]
@@ -49,6 +50,8 @@ export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenPr
   const [loadingChart, setLoadingChart] = useState(false)
   const [error, setError] = useState("")
 
+  const [flashClass, setFlashClass] = useState("")
+
   useEffect(() => {
     async function load() {
       setLoadingStock(true)
@@ -66,6 +69,37 @@ export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenPr
     }
     load()
   }, [token, symbol])
+
+  usePriceStream({
+    symbols: [symbol],
+    token,
+    enabled: true,
+    onSnapshot: (quotes) => {
+      const quote = quotes.find(q => q.symbol === symbol)
+      if (quote && stock) {
+        setStock((prev) => prev ? {
+          ...prev,
+          price: quote.price,
+          change: quote.change,
+          change_pct: quote.change_pct,
+          is_positive: quote.is_positive,
+        } : null)
+      }
+    },
+    onPrice: (quote) => {
+      if (quote.symbol === symbol) {
+        setStock((prev) => prev ? {
+          ...prev,
+          price: quote.price,
+          change: quote.change,
+          change_pct: quote.change_pct,
+          is_positive: quote.is_positive,
+        } : null)
+        setFlashClass(quote.is_positive ? "animate-flash-gain" : "animate-flash-loss")
+        setTimeout(() => setFlashClass(""), 1000)
+      }
+    }
+  })
 
   const handleRangeChange = useCallback(async (range: TimeRange) => {
     setTimeRange(range)
@@ -184,11 +218,11 @@ export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenPr
           </div>
 
           <div className="mt-4">
-            <div className="flex items-baseline gap-2">
+            <div className={`flex items-baseline gap-2 px-2 py-1 rounded transition-colors w-fit -ml-2 ${flashClass}`}>
               <span className="text-3xl font-bold text-foreground">{formatPrice(stock.price)}</span>
               <span className="text-sm text-muted-foreground">INR</span>
             </div>
-            <div className="mt-1 flex items-center gap-2">
+            <div className={`mt-1 flex items-center gap-2 px-2 py-1 rounded transition-colors w-fit -ml-2 ${flashClass}`}>
               {isPositive ? (
                 <TrendingUp className="h-4 w-4 text-gain" />
               ) : (
@@ -197,9 +231,9 @@ export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenPr
               <span className={`font-medium ${isPositive ? "text-gain" : "text-loss"}`}>
                 {isPositive ? "+" : "-"}{formatChangePct(stock.change_pct)} ({isPositive ? "+" : ""}{formatPrice(stock.change)})
               </span>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
+              <span className="text-xs text-muted-foreground flex items-center gap-1 ml-2">
                 <Clock className="h-3 w-3" />
-                Today
+                Live
               </span>
             </div>
           </div>

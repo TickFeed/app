@@ -18,6 +18,7 @@ import {
 import { usePolling } from "@/hooks/use-polling"
 
 const PRICE_POLL_MS = 60_000
+const FEED_TTL_MS  = 5 * 60_000  // 5 minutes
 
 interface HomeScreenProps {
   token: string
@@ -29,6 +30,10 @@ const TABS = [
   { label: "My Stocks", tab: "my_stocks" as const },
   { label: "All News", tab: "all" as const },
 ]
+
+// Module-level cache — survives component unmount/remount on tab switches
+const _feedCache: Record<number, { items: NewsArticle[]; ts: number }> = {}
+const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
 function feedItemToArticle(item: FeedItem): NewsArticle {
   return {
@@ -47,18 +52,26 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
 
 export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
   const [activeTab, setActiveTab] = useState(0)
-  const [news, setNews] = useState<NewsArticle[]>([])
-  const [digest, setDigest] = useState<MarketDigestResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [news,      setNews]      = useState<NewsArticle[]>(_feedCache[0]?.items ?? [])
+  const [digest,    setDigest]    = useState<MarketDigestResponse | null>(_digestCache.data)
+  const [loading,   setLoading]   = useState(!_feedCache[0])
+  const [error,     setError]     = useState("")
 
-  const fetchFeed = useCallback(async (tabIdx: number) => {
+  const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
+    const entry = _feedCache[tabIdx]
+    if (!force && entry && Date.now() - entry.ts < FEED_TTL_MS) {
+      setNews(entry.items)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError("")
     try {
-      const tab = TABS[tabIdx].tab
+      const tab   = TABS[tabIdx].tab
       const items = await getNewsFeed(token, tab)
-      setNews(items.map(feedItemToArticle))
+      const mapped = items.map(feedItemToArticle)
+      _feedCache[tabIdx] = { items: mapped, ts: Date.now() }
+      setNews(mapped)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load news")
     } finally {
@@ -66,9 +79,15 @@ export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
     }
   }, [token])
 
-  const fetchDigest = useCallback(async () => {
+  const fetchDigest = useCallback(async (force = false) => {
+    if (!force && _digestCache.data && Date.now() - _digestCache.ts < FEED_TTL_MS) {
+      setDigest(_digestCache.data)
+      return
+    }
     try {
       const d = await getMarketDigest(token)
+      _digestCache.data = d
+      _digestCache.ts   = Date.now()
       setDigest(d)
     } catch {
       // digest is non-critical — silently ignore
@@ -81,14 +100,28 @@ export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
   }, [activeTab, fetchFeed, fetchDigest])
 
   // Silently refresh market ticker every 60 s while on the For You tab
-  usePolling(fetchDigest, PRICE_POLL_MS, activeTab === 0)
+  usePolling(() => fetchDigest(true), PRICE_POLL_MS, activeTab === 0)
 
   const tickerItems = (digest?.market_ticker ?? []).map((t) => ({
     symbol: t.symbol,
     value: formatPrice(t.price),
     change: formatChangePct(t.change_pct),
     isPositive: t.is_positive,
+    price: t.price,
+    prevClose: t.prev_close,
+    dayOpen: t.day_open,
+    dayHigh: t.day_high,
+    dayLow: t.day_low,
   }))
+
+  const digestHeadline  = digest?.top_story?.title ?? null
+  const digestBrief     = digest?.market_brief ?? null
+  const digestDate      = digest?.top_story?.created_at
+    ? new Date(digest.top_story.created_at).toLocaleDateString("en-IN", {
+        day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+      })
+    : null
+  const indexDigests    = digest?.index_digests ?? {}
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -127,11 +160,17 @@ export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
       </div>
 
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto pb-4">
+      <div className="flex-1 overflow-y-auto pb-4 scrollbar-hide">
         {/* Market Digest — For You only */}
         {activeTab === 0 && tickerItems.length > 0 && (
           <div className="px-4 pb-4">
-            <MarketDigest items={tickerItems} brief={digest?.market_brief} />
+            <MarketDigest
+              items={tickerItems}
+              headline={digestHeadline}
+              brief={digestBrief}
+              dateLabel={digestDate}
+              indexDigests={indexDigests}
+            />
           </div>
         )}
 

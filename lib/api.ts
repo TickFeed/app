@@ -63,12 +63,24 @@ export interface TickerItem {
   change: number
   change_pct: number
   is_positive: boolean
-  day_high: number
-  day_low: number
+  day_open?: number
+  day_high?: number
+  day_low?: number
+  prev_close?: number
+}
+
+export interface IndexDigest {
+  headline: string
+  brief: string
 }
 
 export interface MarketDigestResponse {
   market_brief?: string | null
+  index_digests?: {
+    nifty50?:  IndexDigest
+    sensex?:   IndexDigest
+    banknifty?: IndexDigest
+  }
   top_story: {
     id: number
     title: string

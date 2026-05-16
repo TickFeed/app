@@ -54,6 +54,7 @@ export interface FeedItem {
   summary: string | null
   sentiment: string | null
   symbol: string | null
+  image_url: string | null
 }
 
 export interface TickerItem {

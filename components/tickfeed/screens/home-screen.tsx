@@ -32,7 +32,9 @@ const TABS = [
 ]
 
 // Module-level cache — survives component unmount/remount on tab switches
-const _feedCache: Record<number, { items: NewsArticle[]; ts: number }> = {}
+// Bump _CACHE_VER whenever the feed response shape changes to auto-bust stale entries
+const _CACHE_VER = 2
+const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
 function feedItemToArticle(item: FeedItem): NewsArticle {
@@ -45,20 +47,21 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     tags: item.symbol ? [item.symbol] : [],
     aiSummaryAvailable: item.priority === "HIGH",
     commentsCount: 0,
-    imageUrl: "",
+    imageUrl: item.image_url ?? "",
     content: item.summary ?? undefined,
   }
 }
 
 export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
   const [activeTab, setActiveTab] = useState(0)
-  const [news,      setNews]      = useState<NewsArticle[]>(_feedCache[0]?.items ?? [])
+  const [news,      setNews]      = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
   const [digest,    setDigest]    = useState<MarketDigestResponse | null>(_digestCache.data)
-  const [loading,   setLoading]   = useState(!_feedCache[0])
+  const [loading,   setLoading]   = useState(!_feedCache[`${_CACHE_VER}:0`])
   const [error,     setError]     = useState("")
 
   const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
-    const entry = _feedCache[tabIdx]
+    const cacheKey = `${_CACHE_VER}:${tabIdx}`
+    const entry = _feedCache[cacheKey]
     if (!force && entry && Date.now() - entry.ts < FEED_TTL_MS) {
       setNews(entry.items)
       setLoading(false)
@@ -70,7 +73,7 @@ export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
       const tab   = TABS[tabIdx].tab
       const items = await getNewsFeed(token, tab)
       const mapped = items.map(feedItemToArticle)
-      _feedCache[tabIdx] = { items: mapped, ts: Date.now() }
+      _feedCache[cacheKey] = { items: mapped, ts: Date.now() }
       setNews(mapped)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load news")

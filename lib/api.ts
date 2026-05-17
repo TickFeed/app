@@ -105,6 +105,7 @@ export interface ArticleDetail {
   priority: string
   body: string | null
   created_at: string
+  image_url: string | null
   bookmarked: boolean
 }
 

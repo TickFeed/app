@@ -9,6 +9,7 @@ import { ArticleDetailScreen } from "@/components/tickfeed/screens/article-detai
 import { CommunityScreen } from "@/components/tickfeed/screens/community-screen"
 import { ProfileScreen } from "@/components/tickfeed/screens/profile-screen"
 import { AuthScreen } from "@/components/tickfeed/screens/auth-screen"
+import { NotificationsScreen } from "@/components/tickfeed/screens/notifications-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
 import {
   clearAuthSession,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/auth"
 import { toast } from "@/hooks/use-toast"
 
-export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail"
+export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications"
 
 export interface NewsArticle {
   id: string
@@ -65,6 +66,8 @@ export default function TickFeedApp() {
   const [activeTab, setActiveTab] = useState("home")
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null)
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
+  const [articleInitialTab, setArticleInitialTab] = useState<"ai-summary" | "ai-chat" | "discussions" | undefined>(undefined)
+  const [stockInitialTab, setStockInitialTab] = useState<"overview" | "ai-chat" | "discuss" | undefined>(undefined)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -101,6 +104,7 @@ export default function TickFeedApp() {
 
   const handleNewsClick = (article: NewsArticle) => {
     setSelectedArticle(article)
+    setArticleInitialTab(undefined)
     setPreviousScreen(currentScreen)
     setCurrentScreen("article-detail")
   }
@@ -108,17 +112,53 @@ export default function TickFeedApp() {
   const handleBackFromArticle = () => {
     setCurrentScreen(previousScreen)
     setSelectedArticle(null)
+    setArticleInitialTab(undefined)
   }
 
   const handleStockClick = (symbol: string) => {
     setSelectedStock(symbol)
+    setStockInitialTab(undefined)
     setPreviousScreen(currentScreen)
     setCurrentScreen("stock-detail")
   }
 
   const handleBackFromStock = () => {
-    setCurrentScreen("watchlist")
+    setCurrentScreen(previousScreen)
     setSelectedStock(null)
+    setStockInitialTab(undefined)
+  }
+
+  // Navigate from a notification to the right screen + tab
+  const handleNotificationNavigateToArticle = async (newsId: number, tab?: string) => {
+    setCurrentScreen("home") // reset first
+    try {
+      const { getArticleDetail } = await import("@/lib/api")
+      const detail = await getArticleDetail(token, newsId)
+      const article: NewsArticle = {
+        id: String(detail.id),
+        url: detail.url,
+        source: { name: detail.source, icon: "" },
+        timestamp: detail.published ?? detail.created_at,
+        headline: detail.title,
+        tags: [],
+        aiSummaryAvailable: detail.priority === "HIGH",
+        commentsCount: 0,
+        imageUrl: "",
+      }
+      setSelectedArticle(article)
+      setArticleInitialTab(tab as "ai-summary" | "ai-chat" | "discussions" | undefined)
+      setPreviousScreen("notifications")
+      setCurrentScreen("article-detail")
+    } catch {
+      // If fetch fails, just go home
+    }
+  }
+
+  const handleNotificationNavigateToStock = (symbol: string, tab?: string) => {
+    setSelectedStock(symbol)
+    setStockInitialTab(tab as "overview" | "ai-chat" | "discuss" | undefined)
+    setPreviousScreen("notifications")
+    setCurrentScreen("stock-detail")
   }
 
   const handleAddStockScreen = () => {
@@ -279,7 +319,22 @@ export default function TickFeedApp() {
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
-        return <HomeScreen token={token} onNewsClick={handleNewsClick} />
+        return (
+          <HomeScreen
+            token={token}
+            onNewsClick={handleNewsClick}
+            onNotificationsClick={() => setCurrentScreen("notifications")}
+          />
+        )
+      case "notifications":
+        return (
+          <NotificationsScreen
+            token={token}
+            onBack={() => setCurrentScreen("home")}
+            onNavigateToArticle={handleNotificationNavigateToArticle}
+            onNavigateToStock={handleNotificationNavigateToStock}
+          />
+        )
       case "watchlist":
         return <WatchlistScreen token={token} onStockClick={handleStockClick} onAddStock={handleAddStockScreen} />
       case "add-stock":
@@ -291,11 +346,21 @@ export default function TickFeedApp() {
         )
       case "stock-detail":
         return selectedStock ? (
-          <StockDetailScreen token={token} symbol={selectedStock} onBack={handleBackFromStock} />
+          <StockDetailScreen
+            token={token}
+            symbol={selectedStock}
+            onBack={handleBackFromStock}
+            initialTab={stockInitialTab}
+          />
         ) : null
       case "article-detail":
         return selectedArticle ? (
-          <ArticleDetailScreen token={token} article={selectedArticle} onBack={handleBackFromArticle} />
+          <ArticleDetailScreen
+            token={token}
+            article={selectedArticle}
+            onBack={handleBackFromArticle}
+            initialTab={articleInitialTab}
+          />
         ) : null
       case "community":
         return <CommunityScreen token={token} />
@@ -304,7 +369,7 @@ export default function TickFeedApp() {
           <ProfileScreen user={authSession.user} token={token} onSignOut={handleSignOut} onGoToWatchlist={() => { setActiveTab("watchlist"); setCurrentScreen("watchlist") }} onUpdateUser={handleUpdateUser} />
         ) : null
       default:
-        return <HomeScreen token={token} onNewsClick={handleNewsClick} />
+        return <HomeScreen token={token} onNewsClick={handleNewsClick} onNotificationsClick={() => setCurrentScreen("notifications")} />
     }
   }
 
@@ -334,7 +399,8 @@ export default function TickFeedApp() {
   const showBottomNav =
     currentScreen !== "article-detail" &&
     currentScreen !== "stock-detail" &&
-    currentScreen !== "add-stock"
+    currentScreen !== "add-stock" &&
+    currentScreen !== "notifications"
 
    return (
     <div className="flex h-[100dvh] flex-col bg-background">

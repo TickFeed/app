@@ -211,6 +211,19 @@ export interface TrendingTopic {
   source: string
 }
 
+export interface AppNotification {
+  id: number
+  type: "mention" | "stock_news"
+  title: string
+  body: string | null
+  read: boolean
+  target_type: "article" | "stock" | "community" | null
+  target_id: string | null
+  target_tab: "discuss" | "ai-summary" | "overview" | "ai-chat" | null
+  source_post_id: number | null
+  created_at: string
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const NIFTY50_NAMES: Record<string, string> = {
@@ -445,4 +458,23 @@ export async function unlikePost(
 
 export async function getTrendingTopics(token: string): Promise<TrendingTopic[]> {
   return apiGet('/api/community/trending-topics', token)
+}
+
+// ── Notification APIs ─────────────────────────────────────────────────────────
+
+export async function getNotifications(token: string, limit = 50): Promise<AppNotification[]> {
+  return apiGet(`/api/notifications?limit=${limit}`, token)
+}
+
+export async function getUnreadCount(token: string): Promise<number> {
+  const res = await apiGet<{ count: number }>('/api/notifications/unread-count', token)
+  return res.count
+}
+
+export async function markNotificationsRead(token: string, ids: number[]): Promise<{ unread_count: number }> {
+  return apiPost('/api/notifications/read', token, { ids })
+}
+
+export async function markAllNotificationsRead(token: string): Promise<{ unread_count: number }> {
+  return apiPost('/api/notifications/read-all', token)
 }

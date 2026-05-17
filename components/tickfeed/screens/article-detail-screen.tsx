@@ -27,6 +27,7 @@ interface ArticleDetailScreenProps {
   token: string
   article: NewsArticle
   onBack?: () => void
+  initialTab?: "ai-summary" | "ai-chat" | "discussions"
 }
 
 type TabType = "ai-summary" | "ai-chat" | "discussions"
@@ -38,10 +39,10 @@ interface ChatMessage {
   events?: string[]
 }
 
-export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScreenProps) {
+export function ArticleDetailScreen({ token, article, onBack, initialTab }: ArticleDetailScreenProps) {
   const numericId = parseInt(article.id, 10)
 
-  const [activeTab, setActiveTab] = useState<TabType>("ai-summary")
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? "ai-summary")
 
   // AI summary state
   const [summary, setSummary] = useState<ArticleSummary | null>(null)
@@ -383,7 +384,7 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                 <span className="text-xs text-muted-foreground">Fetching your chat…</span>
               </div>
             ) : null}
-            <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5 ${chatHistoryLoading ? "hidden" : ""}`}>
+            <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 ${chatHistoryLoading ? "hidden" : ""}`}>
 
               {/* Welcome state */}
               {chatMessages.length === 0 && (
@@ -478,19 +479,24 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
 
             {/* Chat Input */}
             <div className="px-4 pb-4">
-              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-muted border border-border">
-                <input
-                  type="text"
+              <div className="flex items-end gap-2 p-1.5 rounded-2xl bg-muted border border-border">
+                <textarea
+                  rows={1}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                  onChange={(e) => {
+                    setInputValue(e.target.value)
+                    e.target.style.height = "auto"
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                   placeholder="Ask anything about this news…"
-                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                  disabled={chatLoading}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none resize-none overflow-hidden leading-5 placeholder:text-muted-foreground disabled:opacity-60"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim() || chatLoading}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90"
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90 mb-0.5"
                 >
                   <Send className="h-4 w-4" />
                 </button>

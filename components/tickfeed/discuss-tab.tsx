@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { Send, Heart, MessageSquare, Bot, AlertCircle } from "lucide-react"
 import {
+  API_BASE,
   getCommunityPosts,
   createPost,
   likePost,
   unlikePost,
-  searchUsers,
   type CommunityPost,
   type UserSearchResult,
 } from "@/lib/api"
@@ -20,41 +20,72 @@ interface DiscussTabProps {
   isActive: boolean
 }
 
+function getMyUserId(token: string): number | null {
+  try {
+    const sub = JSON.parse(atob(token.split(".")[1])).sub
+    const id = Number(sub)
+    return isNaN(id) ? null : id
+  } catch {
+    return null
+  }
+}
+
 export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps) {
+  const myUserId = getMyUserId(token)
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(false)
-  const fetched = useRef(false)
   const listEndRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    const el = scrollContainerRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }
 
   const [postInput, setPostInput] = useState("")
   const [posting, setPosting] = useState(false)
   const [validationError, setValidationError] = useState("")
   const validationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // @mention autocomplete
   const [mentionResults, setMentionResults] = useState<UserSearchResult[]>([])
   const [showMentions, setShowMentions] = useState(false)
-  const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // Usernames confirmed as real (selected from dropdown or exact-matched in results)
-  const [validatedUsers, setValidatedUsers] = useState<Set<string>>(new Set())
 
-  // Fetch posts on first activation
+  // Fetch posts on mount (tab is conditionally rendered so this runs every visit)
   useEffect(() => {
-    if (!isActive || fetched.current) return
-    fetched.current = true
+    if (!isActive) return
     setLoading(true)
     getCommunityPosts(token, "trending", 1, newsId, symbol)
       .then((data) => {
         setPosts(data)
-        // scroll to bottom after load
-        setTimeout(() => listEndRef.current?.scrollIntoView({ behavior: "instant" }), 50)
+        setTimeout(() => scrollToBottom("instant"), 50)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [isActive, token, newsId, symbol])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // @mention input handler
+  // SSE: receive real-time post updates for this thread
+  useEffect(() => {
+    if (!symbol && newsId === undefined) return
+    const param = symbol ? `symbol=${symbol}` : `news_id=${newsId}`
+    const url = `${API_BASE}/api/community/posts/stream?${param}&token=${encodeURIComponent(token)}`
+    const es = new EventSource(url)
+    es.onmessage = () => {
+      getCommunityPosts(token, "trending", 1, newsId, symbol)
+        .then((data) => {
+          setPosts(data)
+          setTimeout(() => scrollToBottom(), 50)
+        })
+        .catch(() => {})
+    }
+    es.onerror = () => es.close()
+    return () => es.close()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // @mention input handler — suggests tickr bot + users who posted in this thread
   const handleInputChange = useCallback((val: string) => {
     setPostInput(val)
     if (validationTimer.current) clearTimeout(validationTimer.current)
@@ -64,44 +95,58 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
       const after = val.slice(at + 1)
       if (/^\w*$/.test(after)) {
         setShowMentions(true)
-        if (mentionTimer.current) clearTimeout(mentionTimer.current)
-        mentionTimer.current = setTimeout(() => {
-          searchUsers(token, after)
-            .then((results) => {
-              setMentionResults(results)
-              // Auto-validate if the typed word exactly matches a returned username
-              const exact = results.find(u => u.username.toLowerCase() === after.toLowerCase())
-              if (exact) {
-                setValidatedUsers(prev => new Set([...prev, exact.username.toLowerCase()]))
-              }
-            })
-            .catch(() => setMentionResults([]))
-        }, 200)
+        const query = after.toLowerCase()
+        const seen = new Set<string>()
+        const suggestions: UserSearchResult[] = []
+        // Always offer tickr bot if it matches the query
+        if (!query || "tickr".startsWith(query)) {
+          suggestions.push({ username: "tickr", first_name: "Tickr", last_name: "AI", is_bot: true })
+          seen.add("tickr")
+        }
+        // Add unique authors from the current thread (exclude self)
+        for (const p of posts) {
+          const uname = p.username
+          if (!uname || seen.has(uname.toLowerCase())) continue
+          if (myUserId !== null && p.author_id === myUserId) continue
+          if (!query || uname.toLowerCase().startsWith(query)) {
+            seen.add(uname.toLowerCase())
+            suggestions.push({ username: uname, first_name: p.first_name ?? "", last_name: p.last_name ?? "", is_bot: false })
+          }
+        }
+        setMentionResults(suggestions)
         return
       }
     }
     setShowMentions(false)
-  }, [token])
+  }, [posts, myUserId])
 
-  // All @mentions in submitted posts are valid users — show all green
+  // Known usernames in this thread (for green highlighting)
+  const threadUsernames = useMemo(() => {
+    const s = new Set<string>(["tickr"])
+    for (const p of posts) {
+      if (p.username) s.add(p.username.toLowerCase())
+    }
+    return s
+  }, [posts])
+
+  // Posts: highlight only real thread participants
   const renderContent = (text: string) => {
     const parts = text.split(/(@\w+)/g)
     return parts.map((part, i) =>
-      part.startsWith("@")
+      part.startsWith("@") && threadUsernames.has(part.slice(1).toLowerCase())
         ? <span key={i} className="font-semibold text-green-500">{part}</span>
-        : part
+        : <span key={i}>{part}</span>
     )
   }
 
-  // Input backdrop: green only for validated usernames (selected from dropdown or exact match)
+  // Input backdrop: color-only highlight so text width matches the input exactly
   const renderInputHighlight = (text: string) => {
     const parts = text.split(/(@\w+)/g)
-    return parts.map((part, i) => {
-      if (part.startsWith("@") && validatedUsers.has(part.slice(1).toLowerCase())) {
-        return <span key={i} className="font-semibold text-green-500">{part}</span>
-      }
-      return <span key={i} className="text-foreground">{part}</span>
-    })
+    return parts.map((part, i) =>
+      part.startsWith("@") && threadUsernames.has(part.slice(1).toLowerCase())
+        ? <span key={i} className="text-green-500">{part}</span>
+        : <span key={i} className="text-foreground">{part}</span>
+    )
   }
 
   const insertMention = (username: string) => {
@@ -109,7 +154,6 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     const newVal = postInput.slice(0, at) + `@${username} `
     setPostInput(newVal)
     setShowMentions(false)
-    setValidatedUsers(prev => new Set([...prev, username.toLowerCase()]))
     inputRef.current?.focus()
   }
 
@@ -133,24 +177,21 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
 
     setPostInput("")
     setShowMentions(false)
+    if (inputRef.current) inputRef.current.style.height = "auto"
     setPosting(true)
     try {
       // Article discuss posts only carry newsId; stock posts carry symbol
       const newPost = await createPost(token, content, newsId ? undefined : symbol, newsId)
-      // Append at bottom (posts are oldest-first)
+      // Optimistic: show immediately (backend now returns full user fields)
       setPosts((prev) => [...prev, newPost])
-      setTimeout(() => listEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50)
-      // If @tickr was mentioned, re-fetch after 4.5s to pick up bot reply
-      if (hasTickr) {
-        setTimeout(() => {
-          getCommunityPosts(token, "trending", 1, newsId, symbol)
-            .then((data) => {
-              setPosts(data)
-              setTimeout(() => listEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50)
-            })
-            .catch(() => {})
-        }, 4500)
-      }
+      setTimeout(() => scrollToBottom(), 50)
+      // Background refetch: fills any posts added since the initial mount
+      getCommunityPosts(token, "trending", 1, newsId, symbol)
+        .then((data) => {
+          setPosts(data)
+          setTimeout(() => scrollToBottom(), 50)
+        })
+        .catch(() => {})
     } catch {
       // ignore
     } finally {
@@ -182,26 +223,26 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
   const botReplies = (parentId: number) => posts.filter((p) => p.reply_to_id === parentId)
 
   const renderPost = (post: CommunityPost) => {
-    const name = [post.first_name, post.last_name].filter(Boolean).join(" ") || post.username || "User"
-    const initials = name.slice(0, 2).toUpperCase()
+    const username = post.username || "user"
+    const initials = username.slice(0, 2).toUpperCase()
     const mins = Math.floor((Date.now() - new Date(post.created_at).getTime()) / 60000)
     const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`
 
     return (
-      <div className="px-4 py-3 border-b border-border/50">
+      <div className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm">
         <div className="flex gap-3">
-          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/20 text-primary">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/15 text-primary">
             {initials}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-sm font-medium text-foreground">{name}</span>
-              <span className="text-xs text-muted-foreground ml-auto">{timeAgo}</span>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-semibold text-foreground">@{username}</span>
+              <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo}</span>
             </div>
-            <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
+            <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
             <button
               onClick={() => handleLike(post)}
-              className={`mt-2 flex items-center gap-1 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`mt-3 flex items-center gap-1.5 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Heart className={`h-3.5 w-3.5 ${post.liked_by_me ? "fill-current" : ""}`} />
               {post.likes_count > 0 && <span>{post.likes_count}</span>}
@@ -217,20 +258,18 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`
 
     return (
-      <div className="border-b border-border/50 bg-primary/5">
-        <div className="ml-10 border-l-2 border-primary/30 px-4 py-3">
-          <div className="flex gap-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-              <Bot className="h-4 w-4" />
+      <div className="ml-8 mr-3 rounded-2xl border border-primary/25 bg-primary/5 px-4 py-3.5 shadow-sm">
+        <div className="flex gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+            <Bot className="h-4 w-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-sm font-semibold text-foreground">@tickr</span>
+              <span className="text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">AI</span>
+              <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo}</span>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-medium text-foreground">Tickr AI</span>
-                <span className="text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">AI</span>
-                <span className="text-xs text-muted-foreground ml-auto">{timeAgo}</span>
-              </div>
-              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
-            </div>
+            <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
           </div>
         </div>
       </div>
@@ -240,9 +279,9 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* Posts list */}
-      <div className="flex-1 min-h-0 overflow-y-auto pb-2">
+      <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto py-3 pb-4">
         {loading ? (
-          <div className="space-y-4 px-4 pt-4">
+          <div className="space-y-3 px-3 pt-1">
             {[1, 2, 3].map((i) => (
               <div key={i} className="animate-pulse flex gap-3">
                 <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
@@ -264,17 +303,19 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
           </div>
         ) : (
           <>
-            <p className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <p className="px-4 pb-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
               {topLevel.length} {topLevel.length === 1 ? "post" : "posts"}
             </p>
-            {topLevel.map((post) => (
-              <div key={post.id}>
-                {renderPost(post)}
-                {botReplies(post.id).map((reply) => (
-                  <div key={reply.id}>{renderBotReply(reply)}</div>
-                ))}
-              </div>
-            ))}
+            <div className="space-y-3">
+              {topLevel.map((post) => (
+                <div key={post.id} className="space-y-1.5">
+                  {renderPost(post)}
+                  {botReplies(post.id).map((reply) => (
+                    <div key={reply.id}>{renderBotReply(reply)}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </>
         )}
         <div ref={listEndRef} />
@@ -284,7 +325,7 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
       <div className="border-t border-border bg-background relative">
         {/* Validation toast — red left-border style */}
         {validationError && (
-          <div className="absolute bottom-full left-4 right-4 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 border-l-4 border-destructive text-destructive text-xs font-medium shadow-sm">
+          <div className="absolute bottom-full left-4 right-4 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive border-l-4 border-destructive/70 text-destructive-foreground text-xs font-medium shadow-sm">
             <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
             {validationError}
           </div>
@@ -310,33 +351,40 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
             ))}
           </div>
         )}
-        <div className="flex gap-2 items-center px-4 py-2">
-          {/* Input with @tickr highlight overlay */}
-          <div className="flex-1 relative rounded-xl bg-muted focus-within:ring-2 focus-within:ring-primary/50">
-            {/* Backdrop — renders highlighted text behind the transparent input */}
-            <div
-              aria-hidden="true"
-              className="absolute inset-0 px-3 py-2 text-sm pointer-events-none overflow-hidden whitespace-pre rounded-xl"
-            >
-              {postInput ? renderInputHighlight(postInput) : null}
+        <div className="px-4 pb-4 pt-2">
+          <div className="flex items-end gap-2 p-1.5 rounded-2xl bg-muted border border-border">
+            {/* Auto-growing textarea with @mention overlay */}
+            <div className="relative flex-1">
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 px-3 py-2 text-sm pointer-events-none overflow-hidden whitespace-pre-wrap break-words leading-5"
+              >
+                {postInput ? renderInputHighlight(postInput) : null}
+              </div>
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={postInput}
+                onChange={(e) => {
+                  handleInputChange(e.target.value)
+                  e.target.style.height = "auto"
+                  e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+                }}
+                onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handlePostSubmit())}
+                onBlur={() => setTimeout(() => setShowMentions(false), 150)}
+                placeholder={symbol ? `Share your take on ${symbol}…` : "Share your take on this…"}
+                disabled={posting}
+                className={`relative w-full bg-transparent px-3 py-2 text-sm outline-none resize-none overflow-hidden leading-5 placeholder:text-muted-foreground disabled:opacity-60 caret-foreground ${postInput ? "text-transparent" : ""}`}
+              />
             </div>
-            <input
-              ref={inputRef}
-              value={postInput}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handlePostSubmit())}
-              onBlur={() => setTimeout(() => setShowMentions(false), 150)}
-              placeholder={symbol ? `Share your take on ${symbol}…` : "Share your take on this…"}
-              className={`relative w-full bg-transparent px-3 py-2 text-sm caret-foreground placeholder:text-muted-foreground focus:outline-none ${postInput ? "text-transparent" : "text-foreground"}`}
-            />
+            <button
+              onClick={handlePostSubmit}
+              disabled={!postInput.trim() || posting}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90 mb-0.5"
+            >
+              <Send className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={handlePostSubmit}
-            disabled={!postInput.trim() || posting}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
-          >
-            <Send className="h-3.5 w-3.5" />
-          </button>
         </div>
       </div>
     </div>

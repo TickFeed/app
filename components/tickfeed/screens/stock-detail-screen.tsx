@@ -43,9 +43,10 @@ interface StockDetailScreenProps {
   token: string
   symbol: string
   onBack: () => void
+  initialTab?: ActiveTab
 }
 
-export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenProps) {
+export function StockDetailScreen({ token, symbol, onBack, initialTab }: StockDetailScreenProps) {
   const [stock, setStock] = useState<StockDetail | null>(null)
   const [chartPoints, setChartPoints] = useState<ChartPoint[]>([])
   const [timeRange, setTimeRange] = useState<TimeRange>("1D")
@@ -55,7 +56,7 @@ export function StockDetailScreen({ token, symbol, onBack }: StockDetailScreenPr
   const [loadingStock, setLoadingStock] = useState(true)
   const [loadingChart, setLoadingChart] = useState(false)
   const [error, setError] = useState("")
-  const [activeTab, setActiveTab] = useState<ActiveTab>("overview")
+  const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab ?? "overview")
 
   const [flashClass, setFlashClass] = useState("")
 

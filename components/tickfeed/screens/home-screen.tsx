@@ -12,6 +12,8 @@ import {
   sourceToIcon,
   formatPrice,
   formatChangePct,
+  getUnreadCount,
+  API_BASE,
   type FeedItem,
   type MarketDigestResponse,
 } from "@/lib/api"
@@ -23,6 +25,7 @@ const FEED_TTL_MS  = 5 * 60_000  // 5 minutes
 interface HomeScreenProps {
   token: string
   onNewsClick?: (article: NewsArticle) => void
+  onNotificationsClick?: () => void
 }
 
 const TABS = [
@@ -56,12 +59,32 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
   }
 }
 
-export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
+export function HomeScreen({ token, onNewsClick, onNotificationsClick }: HomeScreenProps) {
   const [activeTab, setActiveTab] = useState(0)
   const [news,      setNews]      = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
   const [digest,    setDigest]    = useState<MarketDigestResponse | null>(_digestCache.data)
   const [loading,   setLoading]   = useState(!_feedCache[`${_CACHE_VER}:0`])
   const [error,     setError]     = useState("")
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  // Fetch initial unread count + subscribe to SSE for live updates
+  useEffect(() => {
+    if (!token) return
+    getUnreadCount(token).then(setUnreadCount).catch(() => {})
+
+    const url = `${API_BASE}/api/notifications/stream?token=${encodeURIComponent(token)}`
+    const es = new EventSource(url)
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (typeof data.unread_count === "number") setUnreadCount(data.unread_count)
+        if (typeof data.count === "number") setUnreadCount(data.count)
+      } catch {}
+    }
+    es.onerror = () => es.close()
+    return () => es.close()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
     const cacheKey = `${_CACHE_VER}:${tabIdx}`
@@ -142,9 +165,16 @@ export function HomeScreen({ token, onNewsClick }: HomeScreenProps) {
           <button className="rounded-full p-2 text-foreground hover:bg-muted transition-colors">
             <Search className="h-5 w-5" />
           </button>
-          <button className="relative rounded-full p-2 text-foreground hover:bg-muted transition-colors">
+          <button
+            onClick={onNotificationsClick}
+            className="relative rounded-full p-2 text-foreground hover:bg-muted transition-colors"
+          >
             <Bell className="h-5 w-5" />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </div>
       </header>

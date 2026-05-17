@@ -36,6 +36,8 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
   const [mentionResults, setMentionResults] = useState<UserSearchResult[]>([])
   const [showMentions, setShowMentions] = useState(false)
   const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Usernames confirmed as real (selected from dropdown or exact-matched in results)
+  const [validatedUsers, setValidatedUsers] = useState<Set<string>>(new Set())
 
   // Fetch posts on first activation
   useEffect(() => {
@@ -65,7 +67,14 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
         if (mentionTimer.current) clearTimeout(mentionTimer.current)
         mentionTimer.current = setTimeout(() => {
           searchUsers(token, after)
-            .then(setMentionResults)
+            .then((results) => {
+              setMentionResults(results)
+              // Auto-validate if the typed word exactly matches a returned username
+              const exact = results.find(u => u.username.toLowerCase() === after.toLowerCase())
+              if (exact) {
+                setValidatedUsers(prev => new Set([...prev, exact.username.toLowerCase()]))
+              }
+            })
             .catch(() => setMentionResults([]))
         }, 200)
         return
@@ -74,17 +83,24 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     setShowMentions(false)
   }, [token])
 
-  // Highlight @mentions inline
+  // All @mentions in submitted posts are valid users — show all green
   const renderContent = (text: string) => {
     const parts = text.split(/(@\w+)/g)
+    return parts.map((part, i) =>
+      part.startsWith("@")
+        ? <span key={i} className="font-semibold text-green-500">{part}</span>
+        : part
+    )
+  }
+
+  // Input backdrop: green only for validated usernames (selected from dropdown or exact match)
+  const renderInputHighlight = (text: string) => {
+    const parts = text.split(/(@\w+)/g)
     return parts.map((part, i) => {
-      if (!part.startsWith("@")) return part
-      const isTickr = part.toLowerCase() === "@tickr"
-      return (
-        <span key={i} className={isTickr ? "font-semibold text-green-500" : "font-medium text-primary"}>
-          {part}
-        </span>
-      )
+      if (part.startsWith("@") && validatedUsers.has(part.slice(1).toLowerCase())) {
+        return <span key={i} className="font-semibold text-green-500">{part}</span>
+      }
+      return <span key={i} className="text-foreground">{part}</span>
     })
   }
 
@@ -93,6 +109,7 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     const newVal = postInput.slice(0, at) + `@${username} `
     setPostInput(newVal)
     setShowMentions(false)
+    setValidatedUsers(prev => new Set([...prev, username.toLowerCase()]))
     inputRef.current?.focus()
   }
 
@@ -294,15 +311,25 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
           </div>
         )}
         <div className="flex gap-2 items-center px-4 py-2">
-          <input
-            ref={inputRef}
-            value={postInput}
-            onChange={(e) => handleInputChange(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handlePostSubmit())}
-            onBlur={() => setTimeout(() => setShowMentions(false), 150)}
-            placeholder={symbol ? `Share your take on ${symbol}…` : "Share your take on this…"}
-            className="flex-1 rounded-xl bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-          />
+          {/* Input with @tickr highlight overlay */}
+          <div className="flex-1 relative rounded-xl bg-muted focus-within:ring-2 focus-within:ring-primary/50">
+            {/* Backdrop — renders highlighted text behind the transparent input */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 px-3 py-2 text-sm pointer-events-none overflow-hidden whitespace-pre rounded-xl"
+            >
+              {postInput ? renderInputHighlight(postInput) : null}
+            </div>
+            <input
+              ref={inputRef}
+              value={postInput}
+              onChange={(e) => handleInputChange(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handlePostSubmit())}
+              onBlur={() => setTimeout(() => setShowMentions(false), 150)}
+              placeholder={symbol ? `Share your take on ${symbol}…` : "Share your take on this…"}
+              className={`relative w-full bg-transparent px-3 py-2 text-sm caret-foreground placeholder:text-muted-foreground focus:outline-none ${postInput ? "text-transparent" : "text-foreground"}`}
+            />
+          </div>
           <button
             onClick={handlePostSubmit}
             disabled={!postInput.trim() || posting}

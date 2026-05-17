@@ -1,36 +1,27 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft,
   MoreVertical,
-  Bookmark,
   ThumbsUp,
   ThumbsDown,
   Sparkles,
   ExternalLink,
   Send,
   Bot,
-  User,
   MessageSquare,
-  Heart,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { NewsArticle } from "@/app/page"
 import {
-  getArticleDetail,
   getArticleSummary,
-  chatAboutArticle,
-  toggleBookmark,
-  getCommunityPosts,
-  createPost,
-  likePost,
-  unlikePost,
+  getChatHistory,
   API_BASE,
   type ArticleSummary,
-  type CommunityPost,
 } from "@/lib/api"
+import { DiscussTab } from "@/components/tickfeed/discuss-tab"
 
 interface ArticleDetailScreenProps {
   token: string
@@ -51,8 +42,6 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
   const numericId = parseInt(article.id, 10)
 
   const [activeTab, setActiveTab] = useState<TabType>("ai-summary")
-  const [isBookmarked, setIsBookmarked] = useState(false)
-  const [togglingBookmark, setTogglingBookmark] = useState(false)
 
   // AI summary state
   const [summary, setSummary] = useState<ArticleSummary | null>(null)
@@ -61,31 +50,17 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
   const summaryFetched = useRef(false)
 
   // Chat state
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    {
-      id: "init",
-      role: "assistant",
-      content: "Hi! Ask me anything about this article — its implications, affected stocks, or what it means for your investments.",
-    },
-  ])
+  const INIT_MESSAGE: ChatMessage = {
+    id: "init",
+    role: "assistant",
+    content: "Hi! Ask me anything about this article or Indian markets — implications, technical analysis, stock data, and more.",
+  }
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([INIT_MESSAGE])
   const [inputValue, setInputValue] = useState("")
   const [chatLoading, setChatLoading] = useState(false)
+  const [chatHistoryLoaded, setChatHistoryLoaded] = useState(false)
+  const [chatHistoryLoading, setChatHistoryLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
-
-  // Discussions state
-  const [posts, setPosts] = useState<CommunityPost[]>([])
-  const [postsLoading, setPostsLoading] = useState(false)
-  const postsFetched = useRef(false)
-  const [postInput, setPostInput] = useState("")
-  const [posting, setPosting] = useState(false)
-
-  // Fetch article detail for bookmarked status
-  useEffect(() => {
-    if (isNaN(numericId)) return
-    getArticleDetail(token, numericId)
-      .then((detail) => setIsBookmarked(detail.bookmarked))
-      .catch(() => {})
-  }, [token, numericId])
 
   // Fetch summary when AI Summary tab is first shown
   const fetchSummary = useCallback(async () => {
@@ -108,54 +83,25 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
     if (activeTab === "ai-summary") fetchSummary()
   }, [activeTab, fetchSummary])
 
-  const fetchPosts = useCallback(async () => {
-    if (postsFetched.current) return
-    postsFetched.current = true
-    setPostsLoading(true)
-    try {
-      const data = await getCommunityPosts(token, "trending")
-      setPosts(data)
-    } catch {
-      // non-critical
-    } finally {
-      setPostsLoading(false)
-    }
-  }, [token])
-
+  // Load persisted chat history once when the ai-chat tab is first activated
   useEffect(() => {
-    if (activeTab === "discussions") fetchPosts()
-  }, [activeTab, fetchPosts])
-
-  const handlePostSubmit = async () => {
-    if (!postInput.trim() || posting) return
-    const content = postInput.trim()
-    setPostInput("")
-    setPosting(true)
-    try {
-      const symbol = article.tags[0] ?? null
-      const newPost = await createPost(token, content, symbol ?? undefined)
-      setPosts((prev) => [newPost, ...prev])
-    } catch {
-      // ignore
-    } finally {
-      setPosting(false)
-    }
-  }
-
-  const handleLike = async (post: CommunityPost) => {
-    const optimistic = posts.map((p) =>
-      p.id === post.id
-        ? { ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }
-        : p
-    )
-    setPosts(optimistic)
-    try {
-      if (post.liked_by_me) await unlikePost(token, post.id)
-      else await likePost(token, post.id)
-    } catch {
-      setPosts(posts) // revert
-    }
-  }
+    if (activeTab !== "ai-chat" || chatHistoryLoaded || isNaN(numericId)) return
+    setChatHistoryLoaded(true)
+    setChatHistoryLoading(true)
+    getChatHistory(token, numericId)
+      .then((history) => {
+        if (history.length > 0) {
+          const restored: ChatMessage[] = history.map((m, i) => ({
+            id: `history-${i}`,
+            role: m.role,
+            content: m.content,
+          }))
+          setChatMessages([INIT_MESSAGE, ...restored])
+        }
+      })
+      .catch(() => {})
+      .finally(() => setChatHistoryLoading(false))
+  }, [activeTab, chatHistoryLoaded, numericId, token])
 
   useEffect(() => {
     if (activeTab === "ai-chat") {
@@ -163,89 +109,68 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
     }
   }, [chatMessages, activeTab])
 
-  const handleSendMessage = async () => {
-    if (!inputValue.trim() || chatLoading) return
-    const content = inputValue.trim()
-    setInputValue("")
+  const sendMessage = useCallback(async (content: string, currentMessages: ChatMessage[]) => {
+    if (!content.trim() || chatLoading) return
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: "user", content }
     const aiMsgId = (Date.now() + 1).toString()
     const aiMsg: ChatMessage = { id: aiMsgId, role: "assistant", content: "", events: [] }
-    
+    const history = [...currentMessages, userMsg].map((m) => ({ role: m.role, content: m.content }))
+
     setChatMessages((prev) => [...prev, userMsg, aiMsg])
     setChatLoading(true)
 
     try {
-      const history = [...chatMessages, userMsg].map((m) => ({ role: m.role, content: m.content }))
-      
       const res = await fetch(`${API_BASE}/api/news/${numericId}/chat`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({ messages: history })
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ messages: history }),
       })
-
-      if (!res.ok) throw new Error("Failed to chat")
-      if (!res.body) throw new Error("No response body")
-
+      if (!res.ok || !res.body) throw new Error("failed")
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-      let done = false
       let buffer = ""
-
+      let done = false
       while (!done) {
-        const { value, done: doneReading } = await reader.read()
-        done = doneReading
+        const { value, done: d } = await reader.read()
+        done = d
         if (value) {
           buffer += decoder.decode(value, { stream: true })
           const parts = buffer.split("\n\n")
-          buffer = parts.pop() || "" 
-          
+          buffer = parts.pop() || ""
           for (const part of parts) {
-            if (part.startsWith("data: ")) {
-              const dataStr = part.slice(6)
-              try {
-                const data = JSON.parse(dataStr)
-                if (data.type === "chunk") {
-                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content + data.content } : m))
-                } else if (data.type === "event") {
-                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, events: [...(m.events || []), data.message] } : m))
-                } else if (data.type === "error") {
-                  setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content + "\n\nError: " + data.content } : m))
-                }
-              } catch (e) {
-                // Ignore parse errors from keepalive or malformed chunks
-              }
-            }
+            const trimmed = part.trim()
+            if (!trimmed.startsWith("data: ")) continue
+            try {
+              const data = JSON.parse(trimmed.slice(6))
+              if (data.type === "chunk")
+                setChatMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: m.content + data.content } : m))
+              else if (data.type === "event")
+                setChatMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, events: [...(m.events ?? []), JSON.stringify({ kind: data.kind ?? "tool", content: data.content })] } : m))
+            } catch { /* ignore */ }
           }
         }
       }
-    } catch (e) {
-      setChatMessages(prev => prev.map(m => m.id === aiMsgId ? { ...m, content: m.content || "Sorry, something went wrong. Try again." } : m))
+    } catch {
+      setChatMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: "Sorry, something went wrong. Please try again." } : m))
     } finally {
       setChatLoading(false)
     }
-  }
+  }, [chatLoading, numericId, token])
 
-  const handleBookmark = async () => {
-    if (togglingBookmark || isNaN(numericId)) return
-    setTogglingBookmark(true)
-    try {
-      const res = await toggleBookmark(token, numericId)
-      setIsBookmarked(res.bookmarked)
-    } catch {
-      // ignore
-    } finally {
-      setTogglingBookmark(false)
-    }
+  const sendQuestion = useCallback((q: string) => sendMessage(q, chatMessages), [sendMessage, chatMessages])
+
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || chatLoading) return
+    const content = inputValue.trim()
+    setInputValue("")
+    await sendMessage(content, chatMessages)
   }
 
   const tabs = [
     { id: "ai-summary" as TabType, label: "AI Summary", icon: Sparkles, count: null },
     { id: "ai-chat" as TabType, label: "Ask AI", icon: Bot, count: null },
-    { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: posts.length > 0 ? posts.length : null },
+    { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: null },
   ]
 
   return (
@@ -259,20 +184,9 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
           <ChevronLeft className="h-6 w-6" />
         </button>
         <h1 className="text-base font-semibold text-foreground">Article</h1>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={handleBookmark}
-            disabled={togglingBookmark}
-            className={`rounded-full p-2 transition-colors ${
-              isBookmarked ? "text-primary" : "text-muted-foreground hover:text-foreground"
-            } hover:bg-muted`}
-          >
-            <Bookmark className={`h-5 w-5 ${isBookmarked ? "fill-current" : ""}`} />
-          </button>
-          <button className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-            <MoreVertical className="h-5 w-5" />
-          </button>
-        </div>
+        <button className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+          <MoreVertical className="h-5 w-5" />
+        </button>
       </header>
 
       {/* Article Header */}
@@ -319,10 +233,10 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
         ))}
       </div>
 
-      {/* Content */}
+      {/* Content — ai-summary scrolls externally; discuss/ai-chat manage their own scroll */}
+      {activeTab === "ai-summary" && (
       <div className="flex-1 overflow-y-auto">
-        {activeTab === "ai-summary" && (
-          <div className="px-4 py-4">
+        <div className="px-4 py-4">
             {summaryLoading ? (
               <div className="space-y-3 animate-pulse">
                 <div className="rounded-xl bg-muted h-32" />
@@ -445,185 +359,126 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
               </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
-        {activeTab === "discussions" && (
-          <div className="flex flex-col h-full">
-            {/* Article context chip */}
-            <div className="px-4 pt-3 pb-2">
-              <p className="text-xs text-muted-foreground line-clamp-2 italic">"{article.headline}"</p>
-            </div>
+      {activeTab === "discussions" && (
+        <div className="flex-1 flex flex-col min-h-0">
+          <DiscussTab
+            token={token}
+            newsId={numericId}
+            isActive={activeTab === "discussions"}
+          />
+        </div>
+      )}
 
-            {/* Post compose */}
-            <div className="px-4 pb-3 border-b border-border">
-              <div className="flex gap-2 items-end">
-                <textarea
-                  value={postInput}
-                  onChange={(e) => setPostInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && e.metaKey && handlePostSubmit()}
-                  placeholder="What's your take on this? How does it affect the market?"
-                  rows={2}
-                  className="flex-1 resize-none rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <button
-                  onClick={handlePostSubmit}
-                  disabled={!postInput.trim() || posting}
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
-                >
-                  <Send className="h-4 w-4" />
-                </button>
+      {activeTab === "ai-chat" && (
+        <div className="flex-1 flex flex-col min-h-0">
+            {chatHistoryLoading ? (
+              <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                <svg className="h-7 w-7 animate-spin text-green-500" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-xs text-muted-foreground">Fetching your chat…</span>
               </div>
-              {article.tags[0] && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">
-                  Tagged as <span className="font-medium text-primary">{article.tags[0]}</span>
-                </p>
-              )}
-            </div>
+            ) : null}
+            <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5 ${chatHistoryLoading ? "hidden" : ""}`}>
 
-            {/* Posts list */}
-            <div className="flex-1 overflow-y-auto pb-4">
-              {postsLoading ? (
-                <div className="space-y-4 px-4 pt-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="animate-pulse flex gap-3">
-                      <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3 w-24 rounded bg-muted" />
-                        <div className="h-3 w-full rounded bg-muted" />
-                        <div className="h-3 w-2/3 rounded bg-muted" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : posts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                    <MessageSquare className="h-6 w-6 text-muted-foreground" />
+              {/* Welcome state */}
+              {chatMessages.length === 0 && (
+                <div className="flex flex-col items-center pt-4 pb-2">
+                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-3 shadow-lg">
+                    <Sparkles className="h-7 w-7 text-white" />
                   </div>
-                  <p className="font-medium text-foreground text-sm">Start the conversation</p>
-                  <p className="text-xs text-muted-foreground/70 mt-1">Share your perspective on this news</p>
-                </div>
-              ) : (
-                <>
-                  <p className="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    {posts.length} {posts.length === 1 ? "comment" : "comments"}
+                  <p className="font-semibold text-foreground text-base">Ask the AI Analyst</p>
+                  <p className="text-xs text-muted-foreground mt-1 text-center px-6">
+                    Instant insights on this article — impact, stocks to watch, what it means for you.
                   </p>
-                  {posts.map((post) => {
-                    const name = [post.first_name, post.last_name].filter(Boolean).join(" ") || post.username || "User"
-                    const initials = name.slice(0, 2).toUpperCase()
-                    const mins = Math.floor((Date.now() - new Date(post.created_at).getTime()) / 60000)
-                    const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`
-                    return (
-                      <div key={post.id} className="px-4 py-3 border-b border-border/50">
-                        <div className="flex gap-3">
-                          <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">
-                            {initials}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-sm font-medium text-foreground">{name}</span>
-                              {post.symbol && (
-                                <span className="text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5 rounded-full">{post.symbol}</span>
-                              )}
-                              <span className="text-xs text-muted-foreground ml-auto">{timeAgo}</span>
-                            </div>
-                            <p className="text-sm text-foreground/90 leading-relaxed">{post.content}</p>
-                            <button
-                              onClick={() => handleLike(post)}
-                              className={`mt-2 flex items-center gap-1 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-                            >
-                              <Heart className={`h-3.5 w-3.5 ${post.liked_by_me ? "fill-current" : ""}`} />
-                              {post.likes_count > 0 && <span>{post.likes_count}</span>}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "ai-chat" && (
-          <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-              {chatMessages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${message.role === "user" ? "flex-row-reverse" : ""}`}
-                >
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-full flex-shrink-0 ${
-                      message.role === "assistant" ? "bg-primary/20" : "bg-muted"
-                    }`}
-                  >
-                    {message.role === "assistant" ? (
-                      <Bot className="h-4 w-4 text-primary" />
-                    ) : (
-                      <User className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className={`flex-1 max-w-[80%] ${message.role === "user" ? "text-right" : ""}`}>
-                    {message.role === "assistant" && message.events && message.events.length > 0 && (
-                      <div className="flex flex-col gap-1.5 mb-2">
-                        {message.events.map((evt, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/40 w-fit px-2.5 py-1 rounded-full border border-border/40">
-                            <Sparkles className="h-3 w-3 text-primary animate-pulse" />
-                            {evt}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {(message.content || message.role === "user") && (
-                      <div
-                        className={`inline-block rounded-2xl px-4 py-2.5 text-sm ${
-                          message.role === "assistant"
-                            ? "bg-muted text-foreground rounded-tl-none"
-                            : "bg-primary text-primary-foreground rounded-tr-none"
-                        }`}
+                  <div className="w-full mt-5 space-y-2">
+                    {[
+                      { q: "How will this affect the market?", icon: "📈" },
+                      { q: "Which stocks should I watch?", icon: "👀" },
+                      { q: "Explain this in simple terms", icon: "💡" },
+                      { q: "Is this bullish or bearish?", icon: "🎯" },
+                    ].map(({ q, icon }) => (
+                      <button
+                        key={q}
+                        onClick={() => sendQuestion(q)}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-muted hover:bg-muted/70 border border-border/50 text-left transition-colors"
                       >
+                        <span className="text-lg">{icon}</span>
+                        <span className="text-sm text-foreground">{q}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {chatMessages.map((message, idx) => (
+                <div key={message.id}>
+                  {message.role === "user" ? (
+                    /* User bubble — right aligned */
+                    <div className="flex justify-end">
+                      <div className="max-w-[80%] bg-primary text-primary-foreground rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed">
                         {message.content}
                       </div>
-                    )}
-                    {message.role === "assistant" && !message.content && chatLoading && (
-                      <div className="bg-muted rounded-2xl rounded-tl-none px-4 py-3 w-fit">
-                        <div className="flex gap-1">
-                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />
-                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.15s]" />
-                          <span className="h-2 w-2 rounded-full bg-muted-foreground/50 animate-bounce" />
-                        </div>
+                    </div>
+                  ) : (
+                    /* AI message — full width, card style */
+                    <div className="flex gap-3">
+                      <div className="flex-shrink-0 h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm">
+                        <Sparkles className="h-4 w-4 text-white" />
                       </div>
-                    )}
-                  </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-primary mb-1.5 uppercase tracking-wide">AI Analyst</p>
+                        {message.events && message.events.length > 0 && (
+                          <div className="flex flex-col gap-1 mb-2">
+                            {message.events.map((ev, i) => {
+                              let kind = "tool", content = ev
+                              try { const p = JSON.parse(ev); kind = p.kind; content = p.content } catch {}
+                              return (
+                                <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                  <span className="h-1 w-1 rounded-full bg-muted-foreground/50 flex-shrink-0" />
+                                  {content}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                        {!message.content && chatLoading && idx === chatMessages.length - 1 ? (
+                          <ThinkingStatus events={message.events} />
+                        ) : (
+                          <AiMarkdown content={message.content} streaming={chatLoading && idx === chatMessages.length - 1} />
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
               <div ref={chatEndRef} />
             </div>
 
-            {/* Suggested Questions */}
-            <div className="px-4 pb-2">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                {[
-                  "How will this affect stocks?",
-                  "What should I watch?",
-                  "Explain the impact",
-                ].map((q) => (
-                  <button
-                    key={q}
-                    onClick={() => setInputValue(q)}
-                    className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
-                  >
-                    {q}
-                  </button>
-                ))}
+            {/* Suggested chips — shown after first exchange */}
+            {chatMessages.length > 0 && !chatLoading && (
+              <div className="px-4 pb-2">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                  {["What's the risk?", "Give me a trade idea", "Explain simpler", "What next?"].map((q) => (
+                    <button
+                      key={q}
+                      onClick={() => setInputValue(q)}
+                      className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Chat Input */}
             <div className="px-4 pb-4">
-              <div className="flex items-center gap-2 p-2 rounded-full bg-muted">
+              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-muted border border-border">
                 <input
                   type="text"
                   value={inputValue}
@@ -635,7 +490,7 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                 <button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim() || chatLoading}
-                  className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-50 transition-opacity"
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90"
                 >
                   <Send className="h-4 w-4" />
                 </button>
@@ -643,7 +498,137 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
             </div>
           </div>
         )}
-      </div>
+    </div>
+  )
+}
+
+// ── Thinking status with cycling phrases ─────────────────────────────────────
+
+const THINKING_PHRASES = [
+  "Analyzing article…",
+  "Thinking through the data…",
+  "Checking market context…",
+  "Forming a view…",
+  "Reading between the lines…",
+  "Connecting the dots…",
+  "Almost there…",
+]
+
+function ThinkingStatus({ events }: { events?: string[] }) {
+  const [idx, setIdx] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setIdx((i) => (i + 1) % THINKING_PHRASES.length), 1800)
+    return () => clearInterval(t)
+  }, [])
+
+  const lastEvent = events && events.length > 0
+    ? (() => { try { return JSON.parse(events[events.length - 1]).content } catch { return events[events.length - 1] } })()
+    : null
+
+  return (
+    <div className="flex items-center gap-2 py-1">
+      <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse flex-shrink-0" />
+      <span
+        key={lastEvent ?? idx}
+        className="text-xs text-muted-foreground transition-opacity duration-300"
+      >
+        {lastEvent ?? THINKING_PHRASES[idx]}
+      </span>
+    </div>
+  )
+}
+
+// ── AI Markdown renderer ──────────────────────────────────────────────────────
+
+function renderInline(text: string): React.ReactNode {
+  // Split on **bold**, *italic*
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**"))
+      return <strong key={i} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
+    if (part.startsWith("*") && part.endsWith("*"))
+      return <em key={i} className="italic text-foreground/80">{part.slice(1, -1)}</em>
+    return <span key={i}>{part}</span>
+  })
+}
+
+function AiMarkdown({ content, streaming }: { content: string; streaming?: boolean }) {
+  const lines = content.split("\n")
+  const nodes: React.ReactNode[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const raw = lines[i]
+    const line = raw.trim()
+
+    if (!line) { i++; continue }
+
+    // Bullet list — collect consecutive items
+    if (/^[-•*]\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^[-•*]\s/.test(lines[i].trim())) {
+        items.push(lines[i].trim().slice(2))
+        i++
+      }
+      nodes.push(
+        <ul key={nodes.length} className="space-y-1.5 my-1">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-2 text-sm leading-relaxed">
+              <span className="text-primary flex-shrink-0 mt-0.5">▸</span>
+              <span className="text-foreground/90">{renderInline(item)}</span>
+            </li>
+          ))}
+        </ul>
+      )
+      continue
+    }
+
+    // Numbered list
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && /^\d+\.\s/.test(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^\d+\.\s/, ""))
+        i++
+      }
+      nodes.push(
+        <ol key={nodes.length} className="space-y-1.5 my-1">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-2.5 text-sm leading-relaxed">
+              <span className="text-primary font-bold flex-shrink-0 w-4 text-right">{j + 1}.</span>
+              <span className="text-foreground/90">{renderInline(item)}</span>
+            </li>
+          ))}
+        </ol>
+      )
+      continue
+    }
+
+    // Heading
+    if (line.startsWith("### ")) {
+      nodes.push(<p key={nodes.length} className="text-sm font-semibold text-foreground mt-3 mb-0.5">{line.slice(4)}</p>)
+      i++; continue
+    }
+    if (line.startsWith("## ")) {
+      nodes.push(<p key={nodes.length} className="text-sm font-bold text-foreground mt-3 mb-1">{line.slice(3)}</p>)
+      i++; continue
+    }
+
+    // Regular paragraph
+    nodes.push(
+      <p key={nodes.length} className="text-sm leading-relaxed text-foreground/90">
+        {renderInline(line)}
+      </p>
+    )
+    i++
+  }
+
+  return (
+    <div className="space-y-2">
+      {nodes}
+      {streaming && (
+        <span className="inline-block w-0.5 h-4 bg-primary rounded-full animate-pulse align-middle ml-0.5" />
+      )}
     </div>
   )
 }

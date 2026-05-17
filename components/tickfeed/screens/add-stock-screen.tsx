@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { ArrowLeft, Search, Plus, Check, TrendingUp, TrendingDown } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { ArrowLeft, Search, Plus, Check, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
 import {
   searchStocks,
   getTrendingStocks,
+  getWatchlist,
   addToWatchlist,
-  removeFromWatchlist,
   formatPrice,
   formatChangePct,
   symbolToColor,
@@ -32,16 +32,27 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
   const [trending, setTrending] = useState<TrendingStockItem[]>([])
   const [loadingTrending, setLoadingTrending] = useState(true)
   const [searching, setSearching] = useState(false)
-  const [watchlistSymbols, setWatchlistSymbols] = useState<Set<string>>(new Set())
-  const [pendingSymbol, setPendingSymbol] = useState<string | null>(null)
+
+  // Already in watchlist (fetched on mount, read-only here)
+  const [existingSymbols, setExistingSymbols] = useState<Set<string>>(new Set())
+
+  // Locally selected in this session — not persisted until confirm
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Load existing watchlist + trending on mount
   useEffect(() => {
     async function init() {
       setLoadingTrending(true)
       try {
-        const items = await getTrendingStocks(token)
-        setTrending(items)
+        const [items, trendingItems] = await Promise.all([
+          getWatchlist(token),
+          getTrendingStocks(token),
+        ])
+        setExistingSymbols(new Set(items.map((i) => i.symbol)))
+        setTrending(trendingItems)
       } catch {
         // non-critical
       } finally {
@@ -74,35 +85,34 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
     }
   }, [searchQuery, token])
 
-  const handleToggle = useCallback(async (symbol: string) => {
-    const wasAdded = watchlistSymbols.has(symbol)
-    // Optimistic update — flip immediately so the tick/plus changes at once
-    setWatchlistSymbols((prev) => {
-      const s = new Set(prev)
-      wasAdded ? s.delete(symbol) : s.add(symbol)
-      return s
+  const handleToggle = (symbol: string) => {
+    // Already in watchlist — no toggling
+    if (existingSymbols.has(symbol)) return
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(symbol) ? next.delete(symbol) : next.add(symbol)
+      return next
     })
-    setPendingSymbol(symbol)
-    try {
-      if (wasAdded) {
-        await removeFromWatchlist(token, symbol)
-      } else {
-        await addToWatchlist(token, symbol)
-      }
-    } catch {
-      // Revert optimistic update on failure
-      setWatchlistSymbols((prev) => {
-        const s = new Set(prev)
-        wasAdded ? s.add(symbol) : s.delete(symbol)
-        return s
-      })
-    } finally {
-      setPendingSymbol(null)
-      invalidateMyStocksCache()
-    }
-  }, [token, watchlistSymbols])
+  }
 
-  const isAdded = (symbol: string) => watchlistSymbols.has(symbol)
+  const handleConfirm = async () => {
+    if (selected.size === 0 || saving) return
+    setSaving(true)
+    try {
+      await Promise.all([...selected].map((sym) => addToWatchlist(token, sym)))
+      invalidateMyStocksCache()
+      onBack()
+    } catch {
+      // partial failure — still go back so user isn't stuck
+      invalidateMyStocksCache()
+      onBack()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const isExisting = (symbol: string) => existingSymbols.has(symbol)
+  const isSelected = (symbol: string) => selected.has(symbol)
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -132,7 +142,7 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-28">
         {searchQuery.trim() ? (
           <>
             <div className="px-4 pb-2">
@@ -147,8 +157,8 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
                     key={item.symbol}
                     symbol={item.symbol}
                     name={item.name}
-                    isAdded={isAdded(item.symbol)}
-                    isPending={pendingSymbol === item.symbol}
+                    isExisting={isExisting(item.symbol)}
+                    isSelected={isSelected(item.symbol)}
                     onToggle={() => handleToggle(item.symbol)}
                   />
                 ))
@@ -193,8 +203,8 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
                     price={formatPrice(item.price)}
                     change={formatChangePct(item.change_pct)}
                     isPositive={item.is_positive}
-                    isAdded={isAdded(item.symbol)}
-                    isPending={pendingSymbol === item.symbol}
+                    isExisting={isExisting(item.symbol)}
+                    isSelected={isSelected(item.symbol)}
                     onToggle={() => handleToggle(item.symbol)}
                   />
                 ))
@@ -219,6 +229,26 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
           </>
         )}
       </div>
+
+      {/* Floating confirm button */}
+      {selected.size > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-3 bg-gradient-to-t from-background via-background to-transparent">
+          <button
+            onClick={handleConfirm}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary py-4 text-sm font-semibold text-primary-foreground shadow-lg transition-opacity disabled:opacity-70"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4" />
+            )}
+            {saving
+              ? "Adding…"
+              : `Add ${selected.size} stock${selected.size > 1 ? "s" : ""} to Watchlist`}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -229,8 +259,8 @@ function StockRow({
   price,
   change,
   isPositive,
-  isAdded,
-  isPending,
+  isExisting,
+  isSelected,
   onToggle,
 }: {
   symbol: string
@@ -238,16 +268,21 @@ function StockRow({
   price?: string
   change?: string
   isPositive?: boolean
-  isAdded: boolean
-  isPending: boolean
+  isExisting: boolean
+  isSelected: boolean
   onToggle: () => void
 }) {
   const displayName = name || symbolToName(symbol)
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors">
+    <div
+      className={`flex items-center justify-between px-4 py-3 transition-colors ${
+        isExisting ? "opacity-50" : "hover:bg-muted/50 cursor-pointer"
+      } ${isSelected ? "bg-primary/5" : ""}`}
+      onClick={!isExisting ? onToggle : undefined}
+    >
       <div className="flex items-center gap-3">
         <div
-          className="h-10 w-10 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+          className="h-10 w-10 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
           style={{ backgroundColor: symbolToColor(symbol) }}
         >
           {symbolToLogo(symbol)}
@@ -267,17 +302,17 @@ function StockRow({
             </p>
           </div>
         )}
-        <button
-          onClick={onToggle}
-          disabled={isPending}
-          className={`h-8 w-8 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
-            isAdded
+        <div
+          className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+            isExisting
+              ? "bg-primary/20 text-primary"
+              : isSelected
               ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground hover:bg-primary hover:text-primary-foreground"
+              : "bg-muted text-muted-foreground"
           }`}
         >
-          {isAdded ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-        </button>
+          <Check className="h-4 w-4" />
+        </div>
       </div>
     </div>
   )

@@ -138,14 +138,12 @@ export interface StockDetail {
   change_pct: number
   is_positive: boolean
   prev_close: number
-  open: number
+  open: number | null
   day_high: number
   day_low: number
-  week_52_high: number
-  week_52_low: number
-  market_cap: string
+  week_52_high: number | null
+  week_52_low: number | null
   volume: number
-  pe_ratio: number | null
   sector: string | null
   industry: string | null
   related_news: Array<{
@@ -188,6 +186,9 @@ export interface CommunityPost {
   id: number
   content: string
   symbol: string | null
+  news_id: number | null
+  reply_to_id: number | null
+  is_bot: boolean
   likes_count: number
   created_at: string
   author_id: number
@@ -195,6 +196,13 @@ export interface CommunityPost {
   first_name: string | null
   last_name: string | null
   liked_by_me: boolean
+}
+
+export interface UserSearchResult {
+  username: string
+  first_name: string
+  last_name: string
+  is_bot: boolean
 }
 
 export interface TrendingTopic {
@@ -272,11 +280,13 @@ export function sourceToIcon(source: string): string {
   return source.slice(0, 2).toUpperCase()
 }
 
-export function formatPrice(n: number): string {
+export function formatPrice(n: number | null | undefined): string {
+  if (n == null || isNaN(n)) return '—'
   return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-export function formatChangePct(pct: number): string {
+export function formatChangePct(pct: number | null | undefined): string {
+  if (pct == null || isNaN(pct)) return '—'
   return `${Math.abs(pct).toFixed(2)}%`
 }
 
@@ -286,6 +296,15 @@ export function formatLargeNumber(n: number): string {
   if (n >= 1e7) return `${(n / 1e7).toFixed(1)}Cr`
   if (n >= 1e5) return `${(n / 1e5).toFixed(1)}L`
   return n.toLocaleString('en-IN')
+}
+
+export interface UserStats {
+  articles_interacted: number
+  watchlist_count: number
+}
+
+export async function getUserStats(token: string): Promise<UserStats> {
+  return apiGet('/api/user/stats', token)
 }
 
 // ── News APIs ─────────────────────────────────────────────────────────────────
@@ -309,6 +328,17 @@ export async function getArticleDetail(token: string, id: number): Promise<Artic
 
 export async function getArticleSummary(token: string, id: number): Promise<ArticleSummary> {
   return apiGet(`/api/news/${id}/summary`, token)
+}
+
+export interface ChatHistoryMessage {
+  role: "user" | "assistant"
+  content: string
+  created_at: string
+}
+
+export async function getChatHistory(token: string, id: number): Promise<ChatHistoryMessage[]> {
+  const res = await apiGet<{ messages: ChatHistoryMessage[] }>(`/api/news/${id}/chat/history`, token)
+  return res.messages ?? []
 }
 
 export async function toggleBookmark(
@@ -370,8 +400,13 @@ export async function getCommunityPosts(
   token: string,
   tab: 'trending' | 'following' | 'mine' = 'trending',
   page = 1,
+  newsId?: number,
+  symbol?: string,
 ): Promise<CommunityPost[]> {
-  const res = await apiGet<{ posts: CommunityPost[] }>(`/api/community/posts?tab=${tab}&page=${page}`, token)
+  let url = `/api/community/posts?tab=${tab}&page=${page}`
+  if (newsId != null) url += `&news_id=${newsId}`
+  if (symbol) url += `&symbol=${encodeURIComponent(symbol)}`
+  const res = await apiGet<{ posts: CommunityPost[] }>(url, token)
   return res.posts ?? []
 }
 
@@ -379,8 +414,19 @@ export async function createPost(
   token: string,
   content: string,
   symbol?: string,
+  newsId?: number,
 ): Promise<CommunityPost> {
-  return apiPost('/api/community/posts', token, { content, symbol: symbol ?? null })
+  return apiPost('/api/community/posts', token, { content, symbol: symbol ?? null, news_id: newsId ?? null })
+}
+
+export async function getStockChatHistory(token: string, symbol: string): Promise<ChatHistoryMessage[]> {
+  const res = await apiGet<{ messages: ChatHistoryMessage[] }>(`/api/stocks/${encodeURIComponent(symbol)}/chat/history`, token)
+  return res.messages ?? []
+}
+
+export async function searchUsers(token: string, q: string): Promise<UserSearchResult[]> {
+  const res = await apiGet<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}`, token)
+  return res.users ?? []
 }
 
 export async function likePost(

@@ -1,6 +1,6 @@
 "use client"
 
-import { Settings, ChevronRight, Bell, Bookmark, Clock, HelpCircle, LogOut, Moon, Sun, Camera } from "lucide-react"
+import { Settings, ChevronRight, Bell, Clock, HelpCircle, LogOut, Moon, Sun } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useEffect, useMemo, useState } from "react"
 import { useForm } from "react-hook-form"
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import type { AuthUser } from "@/lib/auth"
+import { getUserStats, getWatchlist, formatChangePct, type UserStats, type WatchlistItem } from "@/lib/api"
 
 const AVATAR_STYLES = [
   { id: "initials",      label: "Initials"  },
@@ -41,26 +42,21 @@ type EditFormValues = z.infer<typeof editSchema>
 
 const MENU_ITEMS = [
   { icon: Bell,        label: "Notifications",   description: "Manage your alert preferences", hasArrow: true },
-  { icon: Bookmark,    label: "Saved Articles",   description: "12 articles saved",            hasArrow: true },
   { icon: Clock,       label: "Reading History",  description: "Your recent activity",          hasArrow: true },
   { icon: Settings,    label: "Settings",         description: "App preferences",              hasArrow: true },
   { icon: HelpCircle,  label: "Help & Support",   description: "FAQs and contact us",          hasArrow: true },
 ]
 
-const WATCHLIST_PREVIEW = [
-  { symbol: "HDFCBANK", change: "+1.28%", isPositive: true },
-  { symbol: "TCS",      change: "+2.18%", isPositive: true },
-  { symbol: "RELIANCE", change: "-0.28%", isPositive: false },
-  { symbol: "INFY",     change: "+1.02%", isPositive: true },
-]
 
 interface ProfileScreenProps {
   user: AuthUser
+  token: string
   onSignOut: () => void
+  onGoToWatchlist: () => void
   onUpdateUser: (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }) => Promise<{ user: AuthUser } | { error: string; field?: "username" }>
 }
 
-export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenProps) {
+export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onUpdateUser }: ProfileScreenProps) {
   const [isDarkMode, setIsDarkMode] = useState(() =>
     typeof document !== "undefined"
       ? document.documentElement.classList.contains("dark")
@@ -74,6 +70,14 @@ export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenPr
     }
     return "initials"
   })
+  const [stats, setStats] = useState<UserStats | null>(null)
+  const [watchlist, setWatchlist] = useState<WatchlistItem[] | null>(null)
+
+  useEffect(() => {
+    if (!token) return
+    getUserStats(token).then(setStats).catch(() => {})
+    getWatchlist(token).then(setWatchlist).catch(() => setWatchlist([]))
+  }, [token])
 
   const handleStyleSelect = (styleId: string) => {
     setAvatarStyle(styleId)
@@ -177,33 +181,53 @@ export function ProfileScreen({ user, onSignOut, onUpdateUser }: ProfileScreenPr
         <div className="mx-4 mt-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold text-foreground">Your Watchlist</h3>
-            <button className="text-sm font-medium text-primary hover:underline">View all</button>
+            <button onClick={onGoToWatchlist} className="text-sm font-medium text-primary hover:underline">View all</button>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            {WATCHLIST_PREVIEW.map((stock) => (
-              <div
-                key={stock.symbol}
-                className="cursor-pointer rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/30"
+          {watchlist === null ? (
+            <div className="grid grid-cols-2 gap-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-11 animate-pulse rounded-lg border border-border bg-muted" />
+              ))}
+            </div>
+          ) : watchlist.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-card p-4 text-center">
+              <p className="text-sm text-muted-foreground">No stocks added yet.</p>
+              <button
+                onClick={onGoToWatchlist}
+                className="mt-2 text-sm font-medium text-primary hover:underline"
               >
-                <span className="text-sm font-medium text-foreground">{stock.symbol}</span>
-                <span className={`ml-2 text-xs font-medium ${stock.isPositive ? "text-gain" : "text-loss"}`}>{stock.change}</span>
-              </div>
-            ))}
-          </div>
+                + Add stocks to your watchlist
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {watchlist.slice(0, 4).map((stock) => (
+                <div
+                  key={stock.symbol}
+                  className="cursor-pointer rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/30"
+                >
+                  <span className="text-sm font-medium text-foreground">{stock.symbol}</span>
+                  <span className={`ml-2 text-xs font-medium ${stock.is_positive ? "text-gain" : "text-loss"}`}>
+                    {stock.is_positive ? "+" : "-"}{formatChangePct(stock.change_pct)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Stats */}
-        <div className="mx-4 mt-4 grid grid-cols-3 gap-3">
+        <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg border border-border bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">24</div>
-            <div className="text-xs text-muted-foreground">Articles Read</div>
+            <div className="text-2xl font-bold text-foreground">
+              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.articles_interacted}
+            </div>
+            <div className="text-xs text-muted-foreground">Articles Interacted</div>
           </div>
           <div className="rounded-lg border border-border bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">12</div>
-            <div className="text-xs text-muted-foreground">Saved</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">6</div>
+            <div className="text-2xl font-bold text-foreground">
+              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.watchlist_count}
+            </div>
             <div className="text-xs text-muted-foreground">Stocks</div>
           </div>
         </div>

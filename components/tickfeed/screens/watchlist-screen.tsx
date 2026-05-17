@@ -160,19 +160,21 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
             </button>
           ) : (
             <>
-              <button
-                onClick={onAddStock}
-                className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                <Plus className="h-5 w-5" />
-              </button>
-              {stocks.length > 0 && (
-                <button
-                  onClick={enterEdit}
-                  className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                >
-                  <Pencil className="h-5 w-5" />
-                </button>
+              {!loading && stocks.length > 0 && (
+                <>
+                  <button
+                    onClick={onAddStock}
+                    className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={enterEdit}
+                    className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Pencil className="h-5 w-5" />
+                  </button>
+                </>
               )}
             </>
           )}

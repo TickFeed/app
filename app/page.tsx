@@ -301,7 +301,7 @@ export default function TickFeedApp() {
         return <CommunityScreen token={token} />
       case "profile":
         return authSession ? (
-          <ProfileScreen user={authSession.user} onSignOut={handleSignOut} onUpdateUser={handleUpdateUser} />
+          <ProfileScreen user={authSession.user} token={token} onSignOut={handleSignOut} onGoToWatchlist={() => { setActiveTab("watchlist"); setCurrentScreen("watchlist") }} onUpdateUser={handleUpdateUser} />
         ) : null
       default:
         return <HomeScreen token={token} onNewsClick={handleNewsClick} />

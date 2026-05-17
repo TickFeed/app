@@ -143,7 +143,7 @@ export default function TickFeedApp() {
         tags: [],
         aiSummaryAvailable: detail.priority === "HIGH",
         commentsCount: 0,
-        imageUrl: "",
+        imageUrl: detail.image_url ?? "",
       }
       setSelectedArticle(article)
       setArticleInitialTab(tab as "ai-summary" | "ai-chat" | "discussions" | undefined)

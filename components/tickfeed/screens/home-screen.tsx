@@ -18,8 +18,10 @@ import {
   type MarketDigestResponse,
 } from "@/lib/api"
 import { usePolling } from "@/hooks/use-polling"
+import { usePriceStream, type PriceQuote } from "@/hooks/use-price-stream"
 
 const PRICE_POLL_MS = 60_000
+const INDEX_SYMBOLS = ["NIFTY 50", "SENSEX", "NIFTY BANK", "NIFTY IT"]
 const FEED_TTL_MS  = 5 * 60_000  // 5 minutes
 
 interface HomeScreenProps {
@@ -66,6 +68,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick }: HomeScr
   const [loading,   setLoading]   = useState(!_feedCache[`${_CACHE_VER}:0`])
   const [error,     setError]     = useState("")
   const [unreadCount, setUnreadCount] = useState(0)
+  const [livePrices, setLivePrices] = useState<Record<string, PriceQuote>>({})
 
   // Fetch initial unread count + subscribe to SSE for live updates
   useEffect(() => {
@@ -85,6 +88,22 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick }: HomeScr
     return () => es.close()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  usePriceStream({
+    symbols: INDEX_SYMBOLS,
+    token,
+    enabled: !!token,
+    onSnapshot: (quotes) => {
+      setLivePrices(prev => {
+        const next = { ...prev }
+        for (const q of quotes) next[q.symbol] = q
+        return next
+      })
+    },
+    onPrice: (quote) => {
+      setLivePrices(prev => ({ ...prev, [quote.symbol]: quote }))
+    },
+  })
 
   const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
     const cacheKey = `${_CACHE_VER}:${tabIdx}`
@@ -132,17 +151,20 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick }: HomeScr
   // Silently refresh market ticker every 60 s while on the For You tab
   usePolling(() => fetchDigest(true), PRICE_POLL_MS, activeTab === 0)
 
-  const tickerItems = (digest?.market_ticker ?? []).map((t) => ({
-    symbol: t.symbol,
-    value: formatPrice(t.price),
-    change: formatChangePct(t.change_pct),
-    isPositive: t.is_positive,
-    price: t.price,
-    prevClose: t.prev_close,
-    dayOpen: t.day_open,
-    dayHigh: t.day_high,
-    dayLow: t.day_low,
-  }))
+  const tickerItems = (digest?.market_ticker ?? []).map((t) => {
+    const live = livePrices[t.symbol]
+    return {
+      symbol: t.symbol,
+      value: formatPrice(live?.price ?? t.price),
+      change: formatChangePct(live?.change_pct ?? t.change_pct),
+      isPositive: live?.is_positive ?? t.is_positive,
+      price: live?.price ?? t.price,
+      prevClose: t.prev_close,
+      dayOpen: t.day_open,
+      dayHigh: t.day_high,
+      dayLow: t.day_low,
+    }
+  })
 
   const digestHeadline  = digest?.top_story?.title ?? null
   const digestBrief     = digest?.market_brief ?? null

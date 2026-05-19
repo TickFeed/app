@@ -8,6 +8,7 @@ import {
   createPost,
   likePost,
   unlikePost,
+  dicebearUrl,
   type CommunityPost,
   type UserSearchResult,
 } from "@/lib/api"
@@ -231,8 +232,10 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     return (
       <div className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm">
         <div className="flex gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/15 text-primary">
-            {initials}
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/15 text-primary overflow-hidden">
+            {post.avatar_style && post.avatar_style !== "initials" && post.username ? (
+              <img src={dicebearUrl(post.avatar_style, post.username)} alt={initials} className="h-full w-full object-cover" />
+            ) : initials}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">

@@ -1,5 +1,7 @@
 export type AuthStep = 'method' | 'email' | 'otp' | 'profile' | 'authenticated'
 
+export type AvatarStyle = "initials" | "micah" | "personas" | "notionists-neutral" | "lorelei-neutral" | "shapes"
+
 export interface AuthUser {
   id: string
   email: string
@@ -7,6 +9,7 @@ export interface AuthUser {
   lastName: string
   username: string
   theme: 'light' | 'dark'
+  avatarStyle: AvatarStyle
 }
 
 export interface AuthSession {
@@ -41,10 +44,13 @@ export type CompleteProfileResult =
 const SESSION_STORAGE_KEY = 'tickfeed-auth-session'
 
 /** Keys that are no longer used and should be pruned automatically. */
-const STALE_KEYS = ['tickfeed-registered-users', 'tickfeed-avatar-color']
+const STALE_KEYS = ['tickfeed-registered-users', 'tickfeed-avatar-color', 'tickfeed-avatar-style']
 
 /** All keys owned by this app (cleared on sign-out). */
-const APP_KEYS = [SESSION_STORAGE_KEY, 'tickfeed-avatar-style', 'tickfeed-theme']
+const APP_KEYS = [SESSION_STORAGE_KEY, 'tickfeed-theme']
+
+/** Avatar style localStorage key — now stored server-side; keep in STALE_KEYS to prune. */
+// 'tickfeed-avatar-style' is intentionally omitted — avatar is persisted in the user profile.
 
 /** Call once on app boot to remove orphaned keys from old versions. */
 export function pruneStaleStorage(): void {
@@ -76,7 +82,10 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json()
 }
 
+const VALID_AVATAR_STYLES: AvatarStyle[] = ["initials", "micah", "personas", "notionists-neutral", "lorelei-neutral", "shapes"]
+
 function mapUser(raw: Record<string, unknown>): AuthUser {
+  const rawStyle = (raw.avatarStyle ?? raw.avatar_style) as string | undefined
   return {
     id: String(raw.id),
     email: (raw.email as string) ?? "",
@@ -84,6 +93,7 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
     lastName: (raw.last_name as string) ?? (raw.lastName as string) ?? "",
     username: (raw.username as string) ?? "",
     theme: ((raw.theme as string) === 'dark' ? 'dark' : 'light'),
+    avatarStyle: (VALID_AVATAR_STYLES.includes(rawStyle as AvatarStyle) ? rawStyle : 'initials') as AvatarStyle,
   }
 }
 
@@ -165,7 +175,7 @@ export async function verifyEmailOtp(email: string, otp: string): Promise<Verify
 
 export async function updateProfile(
   token: string,
-  fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }
+  fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark'; avatarStyle?: AvatarStyle }
 ): Promise<{ user: AuthUser } | { error: string; field?: 'username' }> {
   try {
     const res = await fetch(`${API_BASE}/api/user/profile`, {
@@ -176,6 +186,7 @@ export async function updateProfile(
         last_name: fields.lastName,
         username: fields.username,
         theme: fields.theme,
+        avatar_style: fields.avatarStyle,
       }),
     })
     if (res.status === 409) return { error: 'That username is already taken.', field: 'username' }

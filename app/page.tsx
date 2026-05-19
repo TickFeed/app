@@ -10,6 +10,7 @@ import { CommunityScreen } from "@/components/tickfeed/screens/community-screen"
 import { ProfileScreen } from "@/components/tickfeed/screens/profile-screen"
 import { AuthScreen } from "@/components/tickfeed/screens/auth-screen"
 import { NotificationsScreen } from "@/components/tickfeed/screens/notifications-screen"
+import { SearchScreen } from "@/components/tickfeed/screens/search-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
 import {
   clearAuthSession,
@@ -28,7 +29,7 @@ import {
 } from "@/lib/auth"
 import { toast } from "@/hooks/use-toast"
 
-export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications"
+export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search"
 
 export interface NewsArticle {
   id: string
@@ -288,7 +289,7 @@ export default function TickFeedApp() {
     setRegistrationToken(null)
   }
 
-  const handleUpdateUser = async (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark' }) => {
+  const handleUpdateUser = async (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark'; avatarStyle?: import("@/lib/auth").AvatarStyle }) => {
     if (!authSession) return { error: "Not authenticated" }
     const result = await updateProfile(authSession.token, fields)
     if ("error" in result && result.error === "session_expired") {
@@ -324,6 +325,17 @@ export default function TickFeedApp() {
             token={token}
             onNewsClick={handleNewsClick}
             onNotificationsClick={() => setCurrentScreen("notifications")}
+            onSearchClick={() => setCurrentScreen("search")}
+          />
+        )
+      case "search":
+        return (
+          <SearchScreen
+            token={token}
+            onBack={() => setCurrentScreen("home")}
+            onArticleClick={(article) => {
+              handleNewsClick(article)
+            }}
           />
         )
       case "notifications":
@@ -366,7 +378,15 @@ export default function TickFeedApp() {
         return <CommunityScreen token={token} />
       case "profile":
         return authSession ? (
-          <ProfileScreen user={authSession.user} token={token} onSignOut={handleSignOut} onGoToWatchlist={() => { setActiveTab("watchlist"); setCurrentScreen("watchlist") }} onUpdateUser={handleUpdateUser} />
+          <ProfileScreen
+            user={authSession.user}
+            token={token}
+            onSignOut={handleSignOut}
+            onGoToWatchlist={() => { setActiveTab("watchlist"); setCurrentScreen("watchlist") }}
+            onArticleClick={handleNewsClick}
+            onStockClick={handleStockClick}
+            onUpdateUser={handleUpdateUser}
+          />
         ) : null
       default:
         return <HomeScreen token={token} onNewsClick={handleNewsClick} onNotificationsClick={() => setCurrentScreen("notifications")} />
@@ -400,7 +420,8 @@ export default function TickFeedApp() {
     currentScreen !== "article-detail" &&
     currentScreen !== "stock-detail" &&
     currentScreen !== "add-stock" &&
-    currentScreen !== "notifications"
+    currentScreen !== "notifications" &&
+    currentScreen !== "search"
 
    return (
     <div className="flex h-[100dvh] flex-col bg-background">

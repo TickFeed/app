@@ -18,8 +18,10 @@ import {
   type MarketDigestResponse,
 } from "@/lib/api"
 import { usePolling } from "@/hooks/use-polling"
+import { usePriceStream, type PriceQuote } from "@/hooks/use-price-stream"
 
 const PRICE_POLL_MS = 60_000
+const INDEX_SYMBOLS = ["NIFTY 50", "SENSEX", "NIFTY BANK", "NIFTY IT"]
 const FEED_TTL_MS  = 5 * 60_000  // 5 minutes
 
 interface HomeScreenProps {
@@ -87,6 +89,22 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
     return () => es.close()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  usePriceStream({
+    symbols: INDEX_SYMBOLS,
+    token,
+    enabled: !!token,
+    onSnapshot: (quotes) => {
+      setLivePrices(prev => {
+        const next = { ...prev }
+        for (const q of quotes) next[q.symbol] = q
+        return next
+      })
+    },
+    onPrice: (quote) => {
+      setLivePrices(prev => ({ ...prev, [quote.symbol]: quote }))
+    },
+  })
 
   const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
     const cacheKey = `${_CACHE_VER}:${tabIdx}`

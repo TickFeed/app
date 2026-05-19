@@ -184,6 +184,30 @@ export interface TrendingTopic {
   source: string
 }
 
+export interface PublicUserProfile {
+  id: number
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  avatar_style: string | null
+  posts_count: number
+  likes_received: number
+  followers_count: number
+  following_count: number
+  is_following: boolean
+}
+
+export interface FollowingUser {
+  id: number
+  username: string | null
+  first_name: string | null
+  last_name: string | null
+  avatar_style: string | null
+  posts_count: number
+  likes_received: number
+  followers_count: number
+}
+
 export interface AppNotification {
   id: number
   type: "mention" | "stock_news"
@@ -292,7 +316,7 @@ export function formatLargeNumber(n: number): string {
 
 export interface UserStats {
   articles_interacted: number
-  watchlist_count: number
+  stocks_interacted: number
 }
 
 export async function getUserStats(token: string): Promise<UserStats> {
@@ -515,6 +539,19 @@ export async function unfollowUser(token: string, userId: number): Promise<{ fol
 
 export async function getTrendingTopics(token: string): Promise<TrendingTopic[]> {
   return apiGet('/api/community/trending-topics', token)
+}
+
+export async function getFollowing(token: string): Promise<FollowingUser[]> {
+  const res = await apiGet<{ users: FollowingUser[] }>('/api/users/following', token)
+  return res.users ?? []
+}
+
+export async function getMyProfile(token: string): Promise<PublicUserProfile> {
+  return apiGet('/api/users/me/profile', token)
+}
+
+export async function getUserPublicProfile(token: string, userId: number): Promise<PublicUserProfile> {
+  return apiGet(`/api/users/${userId}/profile`, token)
 }
 
 // ── Notification APIs ─────────────────────────────────────────────────────────

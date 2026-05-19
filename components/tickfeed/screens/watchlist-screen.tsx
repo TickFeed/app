@@ -202,7 +202,7 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
                 <StockCard
                   symbol={stock.symbol}
                   name={stock.name}
-                  updatesCount={0}
+                  discussCount={0}
                   logo={stock.logo}
                   logoColor={stock.logoColor}
                   onClick={() => editMode ? toggleSelect(stock.symbol) : onStockClick?.(stock.symbol)}

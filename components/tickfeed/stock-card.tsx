@@ -1,11 +1,11 @@
 "use client"
 
-import { Bell } from "lucide-react"
+import { MessageSquare } from "lucide-react"
 
 interface StockCardProps {
   symbol: string
   name: string
-  updatesCount: number
+  discussCount: number
   logo?: string
   logoColor?: string
   onClick?: () => void
@@ -14,7 +14,7 @@ interface StockCardProps {
 export function StockCard({
   symbol,
   name,
-  updatesCount,
+  discussCount,
   logo,
   logoColor = "#1e40af",
   onClick,
@@ -38,8 +38,10 @@ export function StockCard({
           <p className="font-semibold text-foreground truncate leading-tight">{name}</p>
           <p className="text-xs text-muted-foreground truncate">{symbol}</p>
           <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-            <Bell className="h-3 w-3" />
-            <span>{updatesCount} updates</span>
+            <MessageSquare className="h-3 w-3" />
+            {discussCount > 0 && (
+              <span>{discussCount} {discussCount === 1 ? "discussion" : "discussions"}</span>
+            )}
           </div>
         </div>
       </div>

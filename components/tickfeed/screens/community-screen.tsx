@@ -174,7 +174,7 @@ function MentionTextarea({
 
 // ── Poll display ──────────────────────────────────────────────────────────
 
-function PollDisplay({
+export function PollDisplay({
   post, token, onVoted,
 }: { post: CommunityPost; token: string; onVoted?: (updated: CommunityPost) => void }) {
   const opts = post.poll_options
@@ -252,17 +252,20 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
   const avatarSrc = dicebearUrl(post.avatar_style, post.username ?? "")
 
   const handleShare = async () => {
-    const text = `${name}: ${post.content.slice(0, 120)}${post.content.length > 120 ? "…" : ""}`
+    const url = `${window.location.origin}/?post=${post.id}`
     const canShare = typeof navigator.share === "function"
     if (canShare) {
-      try { await navigator.share({ title: "TickFeed Community", text }) } catch { /* cancelled */ }
+      try { await navigator.share({ title: "TickFeed Community", url }) } catch { /* cancelled */ }
     } else {
-      try { await navigator.clipboard.writeText(text); toast({ title: "Copied to clipboard" }) } catch { /* ignore */ }
+      try { await navigator.clipboard.writeText(url); toast({ title: "Link copied to clipboard" }) } catch { /* ignore */ }
     }
   }
 
   return (
-    <article className="border-b border-border/50 px-4 py-6 hover:bg-muted/20 transition-colors">
+    <article
+      className="border-b border-border/50 px-4 py-6 hover:bg-muted/20 active:bg-muted/30 transition-colors cursor-pointer"
+      onClick={() => !compact && onComment(post)}
+    >
       <div className="flex items-start gap-3">
         {/* Avatar */}
         <Avatar className="h-10 w-10 shrink-0">
@@ -290,7 +293,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
             {/* Follow button — never for yourself, never for bot */}
             {!isMe && !post.is_bot && (
               <button
-                onClick={() => onFollow(post)}
+                onClick={(e) => { e.stopPropagation(); onFollow(post) }}
                 className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
                   post.is_following
                     ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
@@ -342,7 +345,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
           {!compact && (
             <div className="mt-3 flex items-center gap-5">
               <button
-                onClick={() => onLike(post)}
+                onClick={(e) => { e.stopPropagation(); onLike(post) }}
                 className={`flex items-center gap-1.5 text-xs transition-colors ${
                   post.liked_by_me ? "text-rose-500" : "text-muted-foreground hover:text-rose-500"
                 }`}
@@ -353,7 +356,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
 
               {!post.reply_to_id && (
                 <button
-                  onClick={() => onComment(post)}
+                  onClick={(e) => { e.stopPropagation(); onComment(post) }}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -364,7 +367,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
               {/* Reply button — only shown inside CommentsSheet (onReply provided) */}
               {onReply && (
                 <button
-                  onClick={() => onReply(post)}
+                  onClick={(e) => { e.stopPropagation(); onReply(post) }}
                   className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                 >
                   <ChevronLeft className="h-3.5 w-3.5 rotate-180" />
@@ -374,7 +377,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
 
               {!post.reply_to_id && (
                 <button
-                  onClick={handleShare}
+                  onClick={(e) => { e.stopPropagation(); handleShare() }}
                   className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors ml-auto"
                 >
                   <Share2 className="h-4 w-4" />
@@ -630,7 +633,8 @@ interface CommentsSheetProps {
   initialTickrPending?: boolean
 }
 
-function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = false }: CommentsSheetProps) {
+export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = false }: CommentsSheetProps) {
+  const [rootPost, setRootPost] = useState(post)
   const [comments, setComments] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(true)
   const [commentText, setCommentText] = useState("")
@@ -715,6 +719,21 @@ function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = f
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tickrPending])
+
+  const handleRootLike = useCallback(async () => {
+    const prev = rootPost
+    setRootPost((p) => ({ ...p, liked_by_me: !p.liked_by_me, likes_count: p.liked_by_me ? p.likes_count - 1 : p.likes_count + 1 }))
+    try {
+      const res = prev.liked_by_me ? await unlikePost(token, prev.id) : await likePost(token, prev.id)
+      setRootPost((p) => ({ ...p, likes_count: res.likes_count, liked_by_me: res.liked }))
+    } catch {
+      setRootPost(prev)
+    }
+  }, [rootPost, token])
+
+  const handleRootVoted = useCallback((updated: CommunityPost) => {
+    setRootPost(updated)
+  }, [])
 
   const showCommentError = (msg: string) => {
     if (commentErrorTimer.current) clearTimeout(commentErrorTimer.current)
@@ -862,7 +881,7 @@ function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = f
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Original post (compact) */}
         <div className="bg-muted/20 border-b border-border/60">
-          <PostCard post={post} myUserId={myUserId} token={token} onLike={noop} onComment={noop} onFollow={noop} compact />
+          <PostCard post={rootPost} myUserId={myUserId} token={token} onLike={handleRootLike} onComment={noop} onFollow={noop} onVoted={handleRootVoted} />
         </div>
 
         {/* "Replies" label */}

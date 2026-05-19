@@ -44,6 +44,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
   const numericId = parseInt(article.id, 10)
 
   const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? "ai-summary")
+  const [discussCount, setDiscussCount] = useState<number | null>(null)
 
   // AI summary state
   const [summary, setSummary] = useState<ArticleSummary | null>(null)
@@ -172,7 +173,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
   const tabs = [
     { id: "ai-summary" as TabType, label: "AI Summary", icon: Sparkles, count: null },
     { id: "ai-chat" as TabType, label: "Ask AI", icon: Bot, count: null },
-    { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: null },
+    { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: discussCount },
   ]
 
   const handleShare = async () => {
@@ -268,7 +269,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
-            {tab.count != null && (
+            {tab.count != null && tab.count > 0 && (
               <span className="ml-0.5 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-semibold text-primary leading-none">
                 {tab.count}
               </span>
@@ -446,15 +447,14 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
         </div>
       )}
 
-      {activeTab === "discussions" && (
-        <div className="flex-1 flex flex-col min-h-0">
-          <DiscussTab
-            token={token}
-            newsId={numericId}
-            isActive={activeTab === "discussions"}
-          />
-        </div>
-      )}
+      <div className={`flex-1 flex flex-col min-h-0 ${activeTab === "discussions" ? "" : "hidden"}`}>
+        <DiscussTab
+          token={token}
+          newsId={numericId}
+          isActive={activeTab === "discussions"}
+          onCountChange={setDiscussCount}
+        />
+      </div>
 
       {activeTab === "ai-chat" && (
         <div className="flex-1 flex flex-col min-h-0">

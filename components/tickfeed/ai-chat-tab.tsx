@@ -10,7 +10,7 @@ interface AiChatTabProps {
   contextId: number | string  // newsId for article, symbol for stock
   isActive: boolean
   welcomeMessage?: string
-  suggestedQuestions?: Array<{ q: string; icon: string }>
+  suggestedQuestions?: Array<{ q: string; icon?: string }>
   chatEndpoint: string        // e.g. /api/news/123/chat or /api/stocks/RELIANCE/chat
 }
 

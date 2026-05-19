@@ -69,6 +69,7 @@ export default function TickFeedApp() {
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [articleInitialTab, setArticleInitialTab] = useState<"ai-summary" | "ai-chat" | "discussions" | undefined>(undefined)
   const [stockInitialTab, setStockInitialTab] = useState<"overview" | "ai-chat" | "discuss" | undefined>(undefined)
+  const [preArticlePreviousScreen, setPreArticlePreviousScreen] = useState<Screen>("home")
 
   useEffect(() => {
     pruneStaleStorage()
@@ -106,12 +107,14 @@ export default function TickFeedApp() {
   const handleNewsClick = (article: NewsArticle) => {
     setSelectedArticle(article)
     setArticleInitialTab(undefined)
+    setPreArticlePreviousScreen(previousScreen)
     setPreviousScreen(currentScreen)
     setCurrentScreen("article-detail")
   }
 
   const handleBackFromArticle = () => {
     setCurrentScreen(previousScreen)
+    setPreviousScreen(preArticlePreviousScreen)
     setSelectedArticle(null)
     setArticleInitialTab(undefined)
   }
@@ -362,6 +365,7 @@ export default function TickFeedApp() {
             token={token}
             symbol={selectedStock}
             onBack={handleBackFromStock}
+            onArticleClick={handleNewsClick}
             initialTab={stockInitialTab}
           />
         ) : null

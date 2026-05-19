@@ -18,11 +18,9 @@ import {
   type MarketDigestResponse,
 } from "@/lib/api"
 import { usePolling } from "@/hooks/use-polling"
-import { usePriceStream, type PriceQuote } from "@/hooks/use-price-stream"
 
-const PRICE_POLL_MS = 60_000
-const INDEX_SYMBOLS = ["NIFTY 50", "SENSEX", "NIFTY BANK", "NIFTY IT"]
-const FEED_TTL_MS  = 5 * 60_000  // 5 minutes
+const DIGEST_POLL_MS = 60_000
+const FEED_TTL_MS    = 5 * 60_000  // 5 minutes
 
 interface HomeScreenProps {
   token: string
@@ -90,22 +88,6 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  usePriceStream({
-    symbols: INDEX_SYMBOLS,
-    token,
-    enabled: !!token,
-    onSnapshot: (quotes) => {
-      setLivePrices(prev => {
-        const next = { ...prev }
-        for (const q of quotes) next[q.symbol] = q
-        return next
-      })
-    },
-    onPrice: (quote) => {
-      setLivePrices(prev => ({ ...prev, [quote.symbol]: quote }))
-    },
-  })
-
   const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
     const cacheKey = `${_CACHE_VER}:${tabIdx}`
     const entry = _feedCache[cacheKey]
@@ -150,7 +132,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   }, [activeTab, fetchFeed, fetchDigest])
 
   // Silently refresh market ticker every 60 s while on the For You tab
-  usePolling(() => fetchDigest(true), PRICE_POLL_MS, activeTab === 0)
+  usePolling(() => fetchDigest(true), DIGEST_POLL_MS, activeTab === 0)
 
   // Pull-to-refresh
   const handlePullRefresh = useCallback(async () => {

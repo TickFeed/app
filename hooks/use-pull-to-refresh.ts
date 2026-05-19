@@ -44,12 +44,12 @@ export function usePullToRefresh(
       if (!isPullingRef.current) return
       const delta = e.touches[0].clientY - startYRef.current
       if (delta > 0 && el.scrollTop === 0) {
+        e.preventDefault()
         rawDeltaRef.current = delta
         const visual = Math.min(delta * RESISTANCE, MAX_VISUAL)
         setVisualDistance(visual)
         setPullState("pulling")
       } else {
-        // user scrolled up or horizontally — cancel pull
         isPullingRef.current = false
         rawDeltaRef.current = 0
         setVisualDistance(0)
@@ -79,7 +79,7 @@ export function usePullToRefresh(
     }
 
     el.addEventListener("touchstart", onTouchStart, { passive: true })
-    el.addEventListener("touchmove",  onTouchMove,  { passive: true })
+    el.addEventListener("touchmove",  onTouchMove,  { passive: false })
     el.addEventListener("touchend",   onTouchEnd)
 
     return () => {

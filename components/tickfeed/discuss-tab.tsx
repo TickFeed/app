@@ -12,6 +12,7 @@ import {
   type CommunityPost,
   type UserSearchResult,
 } from "@/lib/api"
+import { CommentsSheet, PollDisplay } from "@/components/tickfeed/screens/community-screen"
 
 interface DiscussTabProps {
   token: string
@@ -19,6 +20,7 @@ interface DiscussTabProps {
   symbol?: string        // for stock-specific discuss
   contextLabel?: string
   isActive: boolean
+  onCountChange?: (count: number) => void
 }
 
 function getMyUserId(token: string): number | null {
@@ -31,10 +33,11 @@ function getMyUserId(token: string): number | null {
   }
 }
 
-export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps) {
+export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: DiscussTabProps) {
   const myUserId = getMyUserId(token)
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const listEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -53,14 +56,13 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
   const [mentionResults, setMentionResults] = useState<UserSearchResult[]>([])
   const [showMentions, setShowMentions] = useState(false)
 
-  // Fetch posts on mount (tab is conditionally rendered so this runs every visit)
+  // Fetch posts on mount — always, so count is available before the tab is opened
   useEffect(() => {
-    if (!isActive) return
     setLoading(true)
     getCommunityPosts(token, "trending", 1, newsId, symbol)
       .then((data) => {
         setPosts(data)
-        setTimeout(() => scrollToBottom("instant"), 50)
+        if (isActive) setTimeout(() => scrollToBottom("instant"), 50)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -85,6 +87,17 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     return () => es.close()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Scroll to latest when user navigates to this tab
+  useEffect(() => {
+    if (isActive) setTimeout(() => scrollToBottom("smooth"), 80)
+  }, [isActive])
+
+  // Emit top-level post count to parent whenever posts change
+  useEffect(() => {
+    const count = posts.filter(p => !p.reply_to_id).length
+    onCountChange?.(count)
+  }, [posts, onCountChange])
 
   // @mention input handler — suggests tickr bot + users who posted in this thread
   const handleInputChange = useCallback((val: string) => {
@@ -230,7 +243,10 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
     const timeAgo = mins < 1 ? "just now" : mins < 60 ? `${mins}m` : mins < 1440 ? `${Math.floor(mins / 60)}h` : `${Math.floor(mins / 1440)}d`
 
     return (
-      <div className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm">
+      <div
+        className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm cursor-pointer active:bg-muted/30 transition-colors"
+        onClick={() => setSelectedPost(post)}
+      >
         <div className="flex gap-3">
           <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/15 text-primary overflow-hidden">
             {post.avatar_style && post.avatar_style !== "initials" && post.username ? (
@@ -243,8 +259,20 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
               <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo}</span>
             </div>
             <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
+            {post.image_url && (
+              <div className="mt-3 rounded-xl overflow-hidden border border-border/40">
+                <img src={post.image_url} alt="Post image" className="w-full max-h-60 object-cover" loading="lazy" />
+              </div>
+            )}
+            {post.poll_options && post.poll_options.length >= 2 && (
+              <PollDisplay
+                post={post}
+                token={token}
+                onVoted={(updated) => setPosts((prev) => prev.map((p) => p.id === updated.id ? updated : p))}
+              />
+            )}
             <button
-              onClick={() => handleLike(post)}
+              onClick={(e) => { e.stopPropagation(); handleLike(post) }}
               className={`mt-3 flex items-center gap-1.5 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Heart className={`h-3.5 w-3.5 ${post.liked_by_me ? "fill-current" : ""}`} />
@@ -280,7 +308,7 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex-1 flex flex-col min-h-0 relative">
       {/* Posts list */}
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-y-auto py-3 pb-4">
         {loading ? (
@@ -390,6 +418,19 @@ export function DiscussTab({ token, newsId, symbol, isActive }: DiscussTabProps)
           </div>
         </div>
       </div>
+
+      {selectedPost && (
+        <CommentsSheet
+          post={selectedPost}
+          token={token}
+          myUserId={myUserId}
+          initialTickrPending={/@tickr\b/i.test(selectedPost.content) && selectedPost.comments_count === 0}
+          onClose={(finalCount) => {
+            setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, comments_count: finalCount } : p))
+            setSelectedPost(null)
+          }}
+        />
+      )}
     </div>
   )
 }

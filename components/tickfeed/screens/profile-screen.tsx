@@ -1,8 +1,8 @@
 "use client"
 
-import { Settings, ChevronRight, Bell, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp } from "lucide-react"
+import { Settings, ChevronRight, Bell, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -14,12 +14,39 @@ import { Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import type { AuthUser, AvatarStyle } from "@/lib/auth"
 import {
-  getUserStats, getWatchlist, getInteractionHistory, formatRelativeTime,
-  sourceToIcon, symbolToColor, symbolToLogo,
+  getUserStats, getWatchlist, getInteractionHistory, getFollowing, getMyProfile, getUserPublicProfile,
+  followUser, unfollowUser,
+  formatRelativeTime, sourceToIcon, symbolToColor, symbolToLogo, dicebearUrl as apiBearUrl,
   type UserStats, type WatchlistItem, type InteractionHistoryItem,
+  type FollowingUser, type PublicUserProfile,
 } from "@/lib/api"
 import type { NewsArticle } from "@/app/page"
 
+// ── Alpha Score ───────────────────────────────────────────────────────────────
+function calcAlphaScore(posts: number, likes: number, followers: number) {
+  return posts * 15 + likes * 8 + followers * 25
+}
+
+const ALPHA_TIERS = [
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
+  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
+  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
+  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
+  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted", border: "border-border"           },
+]
+
+function alphaTier(score: number) {
+  return ALPHA_TIERS.find((t) => score >= t.min) ?? ALPHA_TIERS[ALPHA_TIERS.length - 1]
+}
+
+function alphaNextTier(score: number) {
+  const idx = ALPHA_TIERS.findIndex((t) => score >= t.min)
+  return idx > 0 ? ALPHA_TIERS[idx - 1] : null
+}
+
+// ── Avatar helpers ─────────────────────────────────────────────────────────────
 const AVATAR_STYLES: { id: AvatarStyle; label: string }[] = [
   { id: "initials",           label: "Monogram"  },
   { id: "micah",              label: "Minimal"   },
@@ -77,11 +104,39 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
   const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(user.avatarStyle ?? "initials")
   const [stats, setStats] = useState<UserStats | null>(null)
   const [watchlist, setWatchlist] = useState<WatchlistItem[] | null>(null)
+  const [following, setFollowing] = useState<FollowingUser[] | null>(null)
+  const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null)
+  const [selectedUser, setSelectedUser] = useState<PublicUserProfile | null>(null)
+  const [userProfileLoading, setUserProfileLoading] = useState(false)
 
   useEffect(() => {
     if (!token) return
     getUserStats(token).then(setStats).catch(() => {})
     getWatchlist(token).then(setWatchlist).catch(() => setWatchlist([]))
+    getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
+    getMyProfile(token).then(setMyProfile).catch(() => {})
+  }, [token])
+
+  const handleUserClick = useCallback(async (userId: number) => {
+    setUserProfileLoading(true)
+    try {
+      const profile = await getUserPublicProfile(token, userId)
+      setSelectedUser(profile)
+    } catch { /* ignore */ }
+    finally { setUserProfileLoading(false) }
+  }, [token])
+
+  const handleFollowToggle = useCallback(async (profile: PublicUserProfile) => {
+    const wasFollowing = profile.is_following
+    setSelectedUser((p) => p ? { ...p, is_following: !p.is_following, followers_count: p.followers_count + (wasFollowing ? -1 : 1) } : p)
+    try {
+      if (wasFollowing) await unfollowUser(token, profile.id)
+      else await followUser(token, profile.id)
+      // refresh following list
+      getFollowing(token).then(setFollowing).catch(() => {})
+    } catch {
+      setSelectedUser((p) => p ? { ...p, is_following: wasFollowing, followers_count: profile.followers_count } : p)
+    }
   }, [token])
 
   const handleOpenHistory = async () => {
@@ -259,6 +314,55 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           )}
         </div>
 
+        {/* Alpha Score card */}
+        {(() => {
+          const score = myProfile ? calcAlphaScore(myProfile.posts_count, myProfile.likes_received, myProfile.followers_count) : null
+          const tier = score != null ? alphaTier(score) : null
+          const next = score != null ? alphaNextTier(score) : null
+          const prevMin = tier ? tier.min : 0
+          const progress = next && score != null ? Math.min(((score - prevMin) / (next.min - prevMin)) * 100, 100) : 100
+          return (
+            <div className={`mx-4 mt-4 rounded-xl border p-4 ${tier ? tier.border : "border-border"} ${tier ? tier.bg : "bg-muted"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Zap className={`h-4 w-4 ${tier ? tier.color : "text-muted-foreground"}`} />
+                  <span className="text-sm font-bold text-foreground">Alpha Score</span>
+                </div>
+                {tier && (
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${tier.border} ${tier.bg} ${tier.color}`}>
+                    {tier.label}
+                  </span>
+                )}
+              </div>
+              <div className={`text-3xl font-black mb-1 ${tier ? tier.color : "text-foreground"}`}>
+                {score == null ? <span className="inline-block h-8 w-16 animate-pulse rounded bg-muted/60" /> : score.toLocaleString()}
+              </div>
+              {next && score != null && (
+                <>
+                  <div className="h-1.5 w-full rounded-full bg-background/60 overflow-hidden mb-1">
+                    <div className={`h-full rounded-full transition-all ${tier?.color.replace("text-", "bg-")}`} style={{ width: `${progress}%` }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
+                </>
+              )}
+              {score != null && (
+                <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: "Posts", value: myProfile!.posts_count, pts: "×15" },
+                    { label: "Likes", value: myProfile!.likes_received, pts: "×8" },
+                    { label: "Followers", value: myProfile!.followers_count, pts: "×25" },
+                  ].map(({ label, value, pts }) => (
+                    <div key={label} className="rounded-lg bg-background/50 px-2 py-1.5">
+                      <p className="text-sm font-bold text-foreground">{value}</p>
+                      <p className="text-[10px] text-muted-foreground">{label} <span className="opacity-60">{pts}</span></p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Stats */}
         <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
           <div className="rounded-lg border border-border bg-card p-3 text-center">
@@ -269,10 +373,67 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           </div>
           <div className="rounded-lg border border-border bg-card p-3 text-center">
             <div className="text-2xl font-bold text-foreground">
-              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.watchlist_count}
+              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.stocks_interacted}
             </div>
-            <div className="text-xs text-muted-foreground">Stocks</div>
+            <div className="text-xs text-muted-foreground">Stocks Interacted</div>
           </div>
+        </div>
+
+        {/* Following list */}
+        <div className="mx-4 mt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-foreground">Following</h3>
+              {following != null && following.length > 0 && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{following.length}</span>
+              )}
+            </div>
+          </div>
+          {following === null ? (
+            <div className="flex gap-3 overflow-x-auto pb-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex flex-col items-center gap-1.5 shrink-0">
+                  <div className="h-12 w-12 rounded-full bg-muted animate-pulse" />
+                  <div className="h-2.5 w-12 rounded bg-muted animate-pulse" />
+                </div>
+              ))}
+            </div>
+          ) : following.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border bg-card p-4 text-center">
+              <Users className="mx-auto mb-2 h-6 w-6 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Not following anyone yet.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground/70">Follow investors in the Community tab.</p>
+            </div>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-1 scrollbar-hide">
+              {following.map((u) => {
+                const name = u.first_name ? `${u.first_name}${u.last_name ? " " + u.last_name : ""}` : u.username ?? "User"
+                const initials = (u.first_name?.[0] ?? u.username?.[0] ?? "?").toUpperCase() + (u.last_name?.[0] ?? "").toUpperCase()
+                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+                const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
+                const tier = alphaTier(score)
+                return (
+                  <button
+                    key={u.id}
+                    onClick={() => handleUserClick(u.id)}
+                    className="flex flex-col items-center gap-1.5 shrink-0 group"
+                  >
+                    <div className={`relative h-12 w-12 rounded-full border-2 overflow-hidden ${tier.border} group-active:scale-95 transition-transform`}>
+                      {avatarSrc ? (
+                        <img src={avatarSrc} alt={initials} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-primary text-xs font-bold text-primary-foreground">
+                          {initials}
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-foreground font-medium truncate max-w-[52px]">{name.split(" ")[0]}</p>
+                    <p className={`text-[10px] font-semibold ${tier.color}`}>{tier.label}</p>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Dark mode toggle */}
@@ -335,6 +496,110 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           <p className="text-xs text-muted-foreground">TickFeed v1.0.0</p>
         </div>
       </div>
+
+      {/* User profile sheet */}
+      {(selectedUser || userProfileLoading) && (
+        <div className="fixed inset-0 z-[300] flex flex-col bg-background">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+            <button
+              onClick={() => setSelectedUser(null)}
+              className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="font-bold text-base text-foreground">Profile</h2>
+          </div>
+          {userProfileLoading && !selectedUser ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="h-7 w-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+            </div>
+          ) : selectedUser && (() => {
+            const u = selectedUser
+            const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username || "User"
+            const ini = ((u.first_name?.[0] ?? u.username?.[0] ?? "?") + (u.last_name?.[0] ?? "")).toUpperCase()
+            const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+            const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
+            const tier = alphaTier(score)
+            const next = alphaNextTier(score)
+            const prevMin = tier.min
+            const progress = next ? Math.min(((score - prevMin) / (next.min - prevMin)) * 100, 100) : 100
+            return (
+              <div className="flex-1 overflow-y-auto pb-8">
+                {/* Avatar + name */}
+                <div className="flex flex-col items-center pt-8 pb-6 px-6">
+                  <div className={`h-20 w-20 rounded-full border-2 overflow-hidden mb-3 ${tier.border}`}>
+                    {avatarSrc ? (
+                      <img src={avatarSrc} alt={ini} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-primary text-2xl font-bold text-primary-foreground">{ini}</div>
+                    )}
+                  </div>
+                  <h3 className="text-xl font-bold text-foreground">{name}</h3>
+                  <p className="text-sm text-muted-foreground">@{u.username ?? "user"}</p>
+
+                  {/* Follow button */}
+                  <button
+                    onClick={() => handleFollowToggle(u)}
+                    className={`mt-4 rounded-full px-6 py-2 text-sm font-semibold border transition-colors ${
+                      u.is_following
+                        ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                        : "border-primary bg-primary text-primary-foreground hover:opacity-90"
+                    }`}
+                  >
+                    {u.is_following ? "Following" : "Follow"}
+                  </button>
+                </div>
+
+                {/* Alpha Score */}
+                <div className={`mx-4 rounded-xl border p-4 ${tier.border} ${tier.bg}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className={`h-4 w-4 ${tier.color}`} />
+                      <span className="text-sm font-bold text-foreground">Alpha Score</span>
+                    </div>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${tier.border} ${tier.bg} ${tier.color}`}>
+                      {tier.label}
+                    </span>
+                  </div>
+                  <div className={`text-3xl font-black mb-1 ${tier.color}`}>{score.toLocaleString()}</div>
+                  {next && (
+                    <>
+                      <div className="h-1.5 w-full rounded-full bg-background/60 overflow-hidden mb-1">
+                        <div className={`h-full rounded-full transition-all ${tier.color.replace("text-", "bg-")}`} style={{ width: `${progress}%` }} />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
+                    </>
+                  )}
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                    {[
+                      { label: "Posts", value: u.posts_count, pts: "×15" },
+                      { label: "Likes", value: u.likes_received, pts: "×8" },
+                      { label: "Followers", value: u.followers_count, pts: "×25" },
+                    ].map(({ label, value, pts }) => (
+                      <div key={label} className="rounded-lg bg-background/50 px-2 py-1.5">
+                        <p className="text-sm font-bold text-foreground">{value}</p>
+                        <p className="text-[10px] text-muted-foreground">{label} <span className="opacity-60">{pts}</span></p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Social stats */}
+                <div className="mx-4 mt-3 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-border bg-card p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">{u.followers_count}</p>
+                    <p className="text-xs text-muted-foreground">Followers</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card p-3 text-center">
+                    <p className="text-2xl font-bold text-foreground">{u.following_count}</p>
+                    <p className="text-xs text-muted-foreground">Following</p>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
 
       {/* Interaction history sheet */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>

@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { MessageCircle, Sparkles, TrendingUp, RotateCcw } from "lucide-react"
 import type { NewsArticle } from "@/app/page"
 
 // ── Tuning knobs ───────────────────────────────────────────────────────────
-const SWIPE_THRESHOLD  = 72   // px left needed to commit a swipe
-const VELOCITY_THRESH  = 0.45 // px/ms — fast flick counts even below threshold
-const BACK_RESISTANCE  = 0.18 // dampen right-ward rubber-band
+const SWIPE_THRESHOLD     = 72   // px left needed to commit a swipe
+const BACK_RAW_THRESHOLD  = 80   // raw px right needed to go back
+const VELOCITY_THRESH     = 0.45 // px/ms — fast flick counts even below threshold
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface NewsCarouselProps {
@@ -20,55 +20,91 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [dragX,        setDragX]        = useState(0)
   const [isExiting,    setIsExiting]    = useState(false)
+  const [isResetting,  setIsResetting]  = useState(false)
+  const [enterPhase,   setEnterPhase]   = useState<"init" | "animate" | null>(null)
 
   const startXRef     = useRef(0)
   const startTimeRef  = useRef(0)
+  const rawDeltaXRef  = useRef(0)
   const isDraggingRef = useRef(false)
-  const hasDraggedRef = useRef(false)   // distinguish tap vs swipe
+  const hasDraggedRef = useRef(false)
+  const mountedRef    = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   const total  = articles.length
   const isDone = currentIndex >= total
 
   // ── Advance to next card ──────────────────────────────────────────────
   const advance = useCallback(() => {
+    if (!mountedRef.current) return
     setIsExiting(true)
     setTimeout(() => {
+      if (!mountedRef.current) return
+      setIsResetting(true)
       setCurrentIndex(i => i + 1)
       setDragX(0)
       setIsExiting(false)
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (mountedRef.current) setIsResetting(false)
+      }))
     }, 260)
+  }, [])
+
+  const goBack = useCallback((idx: number) => {
+    if (idx === 0 || !mountedRef.current) return
+    setEnterPhase("init")
+    setCurrentIndex(i => i - 1)
+    setDragX(0)
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!mountedRef.current) return
+      setEnterPhase("animate")
+      setTimeout(() => {
+        if (mountedRef.current) setEnterPhase(null)
+      }, 300)
+    }))
   }, [])
 
   const reset = () => {
     setCurrentIndex(0)
     setDragX(0)
     setIsExiting(false)
+    setEnterPhase(null)
   }
 
   // ── Touch handlers ────────────────────────────────────────────────────
   const handleTouchStart = (e: React.TouchEvent) => {
-    if (isExiting) return
-    startXRef.current    = e.touches[0].clientX
-    startTimeRef.current = Date.now()
+    if (isExiting || enterPhase !== null) return
+    startXRef.current     = e.touches[0].clientX
+    startTimeRef.current  = Date.now()
+    rawDeltaXRef.current  = 0
     isDraggingRef.current = true
     hasDraggedRef.current = false
   }
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDraggingRef.current || isExiting) return
+    if (!isDraggingRef.current || isExiting || enterPhase !== null) return
     const raw = e.touches[0].clientX - startXRef.current
+    rawDeltaXRef.current = raw
     if (Math.abs(raw) > 5) hasDraggedRef.current = true
-    setDragX(raw > 0 ? raw * BACK_RESISTANCE : raw)
+    setDragX(raw > 0 ? (currentIndex === 0 ? raw * 0.18 : 0) : raw)
   }
 
   const handleTouchEnd = () => {
-    if (!isDraggingRef.current || isExiting) return
+    if (!isDraggingRef.current || isExiting || enterPhase !== null) return
     isDraggingRef.current = false
 
+    const raw      = rawDeltaXRef.current
+    rawDeltaXRef.current = 0
     const elapsed  = Math.max(1, Date.now() - startTimeRef.current)
     const velocity = Math.abs(dragX) / elapsed
 
-    if (dragX < -SWIPE_THRESHOLD || (velocity > VELOCITY_THRESH && dragX < -24)) {
+    if (raw > BACK_RAW_THRESHOLD && currentIndex > 0) {
+      goBack(currentIndex)
+    } else if (dragX < -SWIPE_THRESHOLD || (velocity > VELOCITY_THRESH && dragX < -24)) {
       advance()
     } else {
       setDragX(0) // spring back
@@ -82,7 +118,7 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
 
   // ── Derived values ────────────────────────────────────────────────────
   // 0 → idle, 1 → fully at threshold
-  const dragProgress  = Math.min(Math.max(0, -dragX) / SWIPE_THRESHOLD, 1)
+  const dragProgress  = isExiting ? 1 : Math.min(Math.max(0, -dragX) / SWIPE_THRESHOLD, 1)
   const isDragging    = dragX !== 0   // true while finger is on screen
 
   // Cards to render (top, middle, back)
@@ -93,10 +129,16 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
   // Top card CSS transform
   const topTransform = isExiting
     ? "translateX(-115%) rotate(-16deg)"
-    : `translateX(${dragX}px) rotate(${dragX * 0.035}deg)`
+    : enterPhase === "init"
+    ? "translateX(-115%) rotate(-10deg)"   // returning card starts off-screen left
+    : `translateX(${dragX}px) rotate(${dragX * 0.035}deg)`  // dragX=0 when enterPhase="animate"
   const topTransition = isExiting
     ? "transform 0.26s ease-in"
-    : isDragging
+    : enterPhase === "init"
+    ? "none"
+    : enterPhase === "animate"
+    ? "transform 0.3s ease-out"
+    : (isDragging || isResetting)
     ? "none"
     : "transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1)"
 
@@ -153,8 +195,12 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
             style={{
               zIndex: 1,
               opacity: 0.72,
-              transform: `scale(${0.88 + dragProgress * 0.03}) translateY(${20 - dragProgress * 10}px)`,
-              transition: isDragging ? "none" : "transform 0.3s ease",
+              transform: isExiting
+                ? "scale(0.94) translateY(10px)"   // advance toward middle during forward exit
+                : enterPhase === "init"
+                ? "scale(0.94) translateY(10px)"   // start at middle (was card1 before back-swipe)
+                : "scale(0.88) translateY(20px)",  // resting back position
+              transition: (isExiting || enterPhase === "animate") ? "transform 0.3s ease-out" : "none",
             }}
           >
             <ArticleCard article={card2} />
@@ -167,8 +213,12 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
             className="absolute inset-x-0 top-0 bottom-0 rounded-2xl overflow-hidden shadow-md"
             style={{
               zIndex: 2,
-              transform: `scale(${0.94 + dragProgress * 0.06}) translateY(${10 - dragProgress * 10}px)`,
-              transition: isDragging ? "none" : "transform 0.3s ease",
+              transform: isExiting
+                ? "scale(1) translateY(0)"         // advance to top during forward exit
+                : enterPhase === "init"
+                ? "scale(1) translateY(0)"         // start at top (was card0 before back-swipe)
+                : "scale(0.94) translateY(10px)",  // resting middle position
+              transition: (isExiting || enterPhase === "animate") ? "transform 0.3s ease-out" : "none",
             }}
           >
             <ArticleCard article={card1} />
@@ -196,7 +246,7 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
 
       {/* ── Swipe hint ── */}
       <p className="mt-3 text-center text-[11px] text-muted-foreground tracking-wide">
-        Swipe left for next &nbsp;·&nbsp; Tap to read
+        Swipe left · right to navigate &nbsp;·&nbsp; Tap to read
       </p>
     </div>
   )
@@ -266,9 +316,23 @@ function ArticleCard({
       <div className="flex flex-1 flex-col p-4 min-h-0">
         <p className="text-[11px] text-muted-foreground mb-2">{article.timestamp}</p>
 
-        <h3 className="flex-1 text-[17px] font-bold leading-snug text-foreground line-clamp-4">
+        <h3 className="text-[17px] font-bold leading-snug text-foreground line-clamp-3 mb-2.5">
           {article.headline}
         </h3>
+
+        {/* Summary teaser */}
+        <div className="flex-1 min-h-0">
+          {article.content ? (
+            <p className="text-sm leading-relaxed text-muted-foreground line-clamp-4">
+              {article.content}
+            </p>
+          ) : (
+            <div className="flex items-center gap-1.5 text-muted-foreground/50">
+              <Sparkles className="h-3 w-3 shrink-0" />
+              <span className="text-xs">AI summary generating…</span>
+            </div>
+          )}
+        </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">

@@ -1,6 +1,6 @@
 "use client"
 
-import { Home, LineChart, Users, User, Plus } from "lucide-react"
+import { Home, LineChart, Users, User } from "lucide-react"
 
 interface BottomNavProps {
   activeTab: string
@@ -9,11 +9,10 @@ interface BottomNavProps {
 
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   const tabs = [
-    { id: "home", label: "Home", icon: Home },
+    { id: "home",      label: "Home",      icon: Home },
     { id: "watchlist", label: "Watchlist", icon: LineChart },
-    { id: "add", label: "", icon: Plus, isAction: true },
     { id: "community", label: "Community", icon: Users },
-    { id: "profile", label: "Profile", icon: User },
+    { id: "profile",   label: "Profile",   icon: User },
   ]
 
   return (
@@ -22,19 +21,6 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
-
-          if (tab.isAction) {
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onTabChange(tab.id)}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
-              >
-                <Icon className="h-5 w-5" />
-              </button>
-            )
-          }
-
           return (
             <button
               key={tab.id}

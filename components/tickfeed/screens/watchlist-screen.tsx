@@ -1,28 +1,22 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { Plus, Pencil, Search, TrendingUp, TrendingDown, Trash2, CheckCircle2, Circle } from "lucide-react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { Plus, Pencil, Search, Trash2, CheckCircle2, Circle, RefreshCw } from "lucide-react"
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { StockCard } from "../stock-card"
 import {
   getWatchlist,
   removeFromWatchlist,
-  formatPrice,
-  formatChangePct,
   symbolToName,
   symbolToColor,
   symbolToLogo,
   type WatchlistItem,
 } from "@/lib/api"
 import { invalidateMyStocksCache } from "./home-screen"
-import { usePriceStream } from "@/hooks/use-price-stream"
 
 interface DisplayStock {
   symbol: string
   name: string
-  price: string
-  change: string
-  isPositive: boolean
-  chartData: number[]
   logoColor: string
   logo: string
 }
@@ -36,11 +30,7 @@ interface WatchlistScreenProps {
 function watchlistItemToDisplay(item: WatchlistItem): DisplayStock {
   return {
     symbol: item.symbol,
-    name: symbolToName(item.symbol),
-    price: item.price != null ? formatPrice(item.price) : "—",
-    change: item.change_pct != null ? formatChangePct(item.change_pct) : "—",
-    isPositive: item.is_positive ?? true,
-    chartData: item.sparkline,
+    name: item.name ?? symbolToName(item.symbol),
     logoColor: symbolToColor(item.symbol),
     logo: symbolToLogo(item.symbol),
   }
@@ -48,7 +38,6 @@ function watchlistItemToDisplay(item: WatchlistItem): DisplayStock {
 
 export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistScreenProps) {
   const [stocks, setStocks] = useState<DisplayStock[]>([])
-  const [symbols, setSymbols] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
@@ -56,14 +45,12 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removing, setRemoving] = useState(false)
 
-  // Load watchlist structure (symbols + names) once on mount
   const fetchWatchlist = useCallback(async () => {
     setLoading(true)
     setError("")
     try {
       const items = await getWatchlist(token)
       setStocks(items.map(watchlistItemToDisplay))
-      setSymbols(items.map((i) => i.symbol))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load watchlist")
     } finally {
@@ -73,50 +60,14 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
 
   useEffect(() => { fetchWatchlist() }, [fetchWatchlist])
 
-  // SSE: receive snapshot or individual price updates, update only what changed
-  usePriceStream({
-    symbols,
-    token,
-    enabled: symbols.length > 0,
-    onSnapshot: (quotes) => {
-      const priceMap = new Map(quotes.map((q) => [q.symbol, q]))
-      setStocks((prev) =>
-        prev.map((s) => {
-          const q = priceMap.get(s.symbol)
-          if (!q) return s
-          return {
-            ...s,
-            price: formatPrice(q.price),
-            change: formatChangePct(q.change_pct),
-            isPositive: q.is_positive,
-          }
-        }),
-      )
-    },
-    onPrice: (quote) => {
-      setStocks((prev) =>
-        prev.map((s) =>
-          s.symbol === quote.symbol
-            ? {
-                ...s,
-                price: formatPrice(quote.price),
-                change: formatChangePct(quote.change_pct),
-                isPositive: quote.is_positive,
-              }
-            : s,
-        ),
-      )
-    },
-  })
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const { pullState } = usePullToRefresh(scrollRef, fetchWatchlist)
 
   const filteredStocks = stocks.filter(
     (s) =>
       s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
-
-  const totalGainers = stocks.filter((s) => s.isPositive).length
-  const totalLosers = stocks.filter((s) => !s.isPositive).length
 
   const enterEdit = () => { setEditMode(true); setSelected(new Set()) }
   const exitEdit  = () => { setEditMode(false); setSelected(new Set()) }
@@ -135,7 +86,6 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
     try {
       await Promise.all([...selected].map((sym) => removeFromWatchlist(token, sym)))
       setStocks((prev) => prev.filter((s) => !selected.has(s.symbol)))
-      setSymbols((prev) => prev.filter((s) => !selected.has(s)))
       invalidateMyStocksCache()
       exitEdit()
     } finally {
@@ -181,31 +131,9 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
         </div>
       </header>
 
-      {/* Portfolio Summary */}
-      {!loading && stocks.length > 0 && (
-        <div className="px-4 py-3">
-          <div className="flex gap-3">
-            <div className="flex-1 p-3 rounded-xl bg-gain/10 border border-gain/20">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-gain" />
-                <span className="text-xs text-muted-foreground">Gainers</span>
-              </div>
-              <p className="text-xl font-bold text-gain mt-1">{totalGainers}</p>
-            </div>
-            <div className="flex-1 p-3 rounded-xl bg-loss/10 border border-loss/20">
-              <div className="flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-loss" />
-                <span className="text-xs text-muted-foreground">Losers</span>
-              </div>
-              <p className="text-xl font-bold text-loss mt-1">{totalLosers}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Search */}
       {!loading && stocks.length > 0 && (
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-3 pt-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -219,7 +147,7 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
         </div>
       )}
 
-      {/* Stock Count */}
+      {/* Stock count */}
       {!loading && stocks.length > 0 && (
         <div className="px-4 pb-2">
           <p className="text-xs text-muted-foreground">
@@ -228,8 +156,16 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
         </div>
       )}
 
+      {/* Pull-to-refresh indicator */}
+      <div className={`flex items-center justify-center gap-2 overflow-hidden bg-background transition-all duration-300 ${pullState !== "idle" ? "h-10" : "h-0"}`}>
+        <RefreshCw className={`h-4 w-4 text-primary ${pullState === "refreshing" ? "animate-spin" : ""}`} />
+        <span className="text-xs text-muted-foreground">
+          {pullState === "refreshing" ? "Refreshing…" : "Release to refresh"}
+        </span>
+      </div>
+
       {/* Content */}
-      <div className="flex-1 overflow-y-auto pb-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-4">
         {loading ? (
           <div className="space-y-0">
             {[1, 2, 3].map((i) => (
@@ -239,7 +175,6 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
                   <div className="h-3 w-24 rounded bg-muted mb-1" />
                   <div className="h-3 w-32 rounded bg-muted" />
                 </div>
-                <div className="h-8 w-16 rounded bg-muted" />
               </div>
             ))}
           </div>
@@ -267,11 +202,7 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
                 <StockCard
                   symbol={stock.symbol}
                   name={stock.name}
-                  price={stock.price}
-                  change={stock.change}
-                  isPositive={stock.isPositive}
                   updatesCount={0}
-                  chartData={stock.chartData}
                   logo={stock.logo}
                   logoColor={stock.logoColor}
                   onClick={() => editMode ? toggleSelect(stock.symbol) : onStockClick?.(stock.symbol)}
@@ -286,7 +217,7 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
             </div>
             <p className="text-foreground font-medium">No stocks yet</p>
             <p className="text-sm text-muted-foreground mt-1 mb-4">
-              Add stocks to track their performance
+              Add stocks to track news and get AI insights
             </p>
             <button
               onClick={onAddStock}

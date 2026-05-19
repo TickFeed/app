@@ -129,10 +129,13 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
     }
   }, [chatLoading, chatEndpoint, token])
 
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
   const handleSend = async () => {
     if (!inputValue.trim() || chatLoading) return
     const content = inputValue.trim()
     setInputValue("")
+    if (inputRef.current) inputRef.current.style.height = "auto"
     await sendMessage(content, chatMessages)
   }
 
@@ -147,32 +150,8 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
           <span className="text-xs text-muted-foreground">Fetching your chat…</span>
         </div>
       ) : null}
-      <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5 ${historyLoading ? "hidden" : ""}`}>
-        {chatMessages.length <= 1 && !chatLoading && (
-          <div className="flex flex-col items-center pt-4 pb-2">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center mb-3 shadow-lg">
-              <Sparkles className="h-7 w-7 text-white" />
-            </div>
-            <p className="font-semibold text-foreground text-base">Ask Tickr AI</p>
-            <p className="text-xs text-muted-foreground mt-1 text-center px-6">
-              Instant market insights — prices, technicals, what it means for you.
-            </p>
-            {suggestedQuestions && (
-              <div className="w-full mt-5 space-y-2">
-                {suggestedQuestions.map(({ q, icon }) => (
-                  <button
-                    key={q}
-                    onClick={() => sendMessage(q, chatMessages)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-muted hover:bg-muted/70 border border-border/50 text-left transition-colors"
-                  >
-                    <span className="text-lg">{icon}</span>
-                    <span className="text-sm text-foreground">{q}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+      <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 ${historyLoading ? "hidden" : ""}`}>
+
         {chatMessages.map((message, idx) => (
           <div key={message.id}>
             {message.role === "user" ? (
@@ -214,22 +193,47 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
         ))}
         <div ref={chatEndRef} />
       </div>
+      {/* Suggested chips above input */}
+      {suggestedQuestions && suggestedQuestions.length > 0 && !chatLoading && (
+        <div className="px-4 pb-2">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            {suggestedQuestions.map(({ q }) => (
+              <button
+                key={q}
+                onClick={() => {
+                  setInputValue(q)
+                  inputRef.current?.focus()
+                }}
+                className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 transition-colors"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input */}
-      <div className="px-4 pt-2 pb-4 border-t border-border">
-        <div className="flex gap-2 items-end">
+      <div className="px-4 pb-4 pt-2 border-t border-border">
+        <div className="flex items-end gap-2 p-1.5 rounded-2xl bg-muted border border-border">
           <textarea
+            ref={inputRef}
+            rows={1}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => {
+              setInputValue(e.target.value)
+              e.target.style.height = "auto"
+              e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+            }}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
             placeholder="Ask about price, technicals, outlook…"
-            rows={2}
             disabled={chatLoading}
-            className="flex-1 resize-none rounded-xl bg-muted px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
+            className="flex-1 bg-transparent px-3 py-2 text-sm outline-none resize-none overflow-hidden leading-5 placeholder:text-muted-foreground disabled:opacity-60"
           />
           <button
             onClick={handleSend}
             disabled={!inputValue.trim() || chatLoading}
-            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40 transition-opacity"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90 mb-0.5"
           >
             <Send className="h-4 w-4" />
           </button>

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft,
-  MoreVertical,
+  Share2,
   ThumbsUp,
   ThumbsDown,
   Sparkles,
@@ -22,11 +22,13 @@ import {
   type ArticleSummary,
 } from "@/lib/api"
 import { DiscussTab } from "@/components/tickfeed/discuss-tab"
+import { toast } from "@/hooks/use-toast"
 
 interface ArticleDetailScreenProps {
   token: string
   article: NewsArticle
   onBack?: () => void
+  initialTab?: "ai-summary" | "ai-chat" | "discussions"
 }
 
 type TabType = "ai-summary" | "ai-chat" | "discussions"
@@ -38,10 +40,10 @@ interface ChatMessage {
   events?: string[]
 }
 
-export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScreenProps) {
+export function ArticleDetailScreen({ token, article, onBack, initialTab }: ArticleDetailScreenProps) {
   const numericId = parseInt(article.id, 10)
 
-  const [activeTab, setActiveTab] = useState<TabType>("ai-summary")
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab ?? "ai-summary")
 
   // AI summary state
   const [summary, setSummary] = useState<ArticleSummary | null>(null)
@@ -173,6 +175,25 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
     { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: null },
   ]
 
+  const handleShare = async () => {
+    const appUrl = `${window.location.origin}/news/${numericId}`
+    const title  = article.headline
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title, url: appUrl })
+      } catch {
+        // user cancelled — ignore
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(appUrl)
+        toast({ title: "Link copied", description: "Article link copied to clipboard." })
+      } catch {
+        toast({ title: "Share", description: appUrl })
+      }
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
@@ -184,29 +205,55 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
           <ChevronLeft className="h-6 w-6" />
         </button>
         <h1 className="text-base font-semibold text-foreground">Article</h1>
-        <button className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-          <MoreVertical className="h-5 w-5" />
+        <button
+          onClick={handleShare}
+          className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Share2 className="h-5 w-5" />
         </button>
       </header>
 
-      {/* Article Header */}
-      <div className="px-4 py-4 border-b border-border">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded bg-muted">
-            <span className="text-[10px] font-bold text-muted-foreground">{article.source.icon}</span>
+      {/* Article meta */}
+      <div className="px-4 pt-4 pb-3 border-b border-border">
+        {/* Source + timestamp */}
+        <div className="flex items-center gap-1.5 mb-2.5">
+          {article.source.icon && (
+            <div className="flex h-5 w-5 items-center justify-center rounded bg-muted flex-shrink-0">
+              <span className="text-[10px] font-bold text-muted-foreground">{article.source.icon}</span>
+            </div>
+          )}
+          <span className="text-xs font-medium text-muted-foreground">{article.source.name}</span>
+          <span className="text-muted-foreground/40 text-xs">·</span>
+          <span className="text-xs text-muted-foreground">{article.timestamp}</span>
+        </div>
+
+        {/* Headline + thumbnail side by side */}
+        <div className="flex gap-3 mb-3">
+          <h2 className="flex-1 text-[17px] font-bold leading-snug text-foreground">
+            {article.headline}
+          </h2>
+          {article.imageUrl && (
+            <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-muted self-start">
+              <img
+                src={article.imageUrl}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none" }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Tags */}
+        {article.tags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {article.tags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0.5">
+                {tag}
+              </Badge>
+            ))}
           </div>
-          <span className="text-sm text-muted-foreground">{article.source.name}</span>
-          <span className="text-sm text-muted-foreground">·</span>
-          <span className="text-sm text-muted-foreground">{article.timestamp}</span>
-        </div>
-        <h2 className="text-xl font-bold leading-tight text-foreground mb-3">{article.headline}</h2>
-        <div className="flex flex-wrap gap-2">
-          {article.tags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="text-xs">
-              {tag}
-            </Badge>
-          ))}
-        </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -262,28 +309,65 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                       <Sparkles className="h-4 w-4 text-primary" />
                     </div>
                     <span className="font-semibold text-foreground">AI Explains</span>
-                    <Badge variant="secondary" className="text-[10px] ml-auto">
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ml-auto ${
+                      summary.sentiment?.toLowerCase() === "bullish"
+                        ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10"
+                        : summary.sentiment?.toLowerCase() === "bearish"
+                        ? "border-red-500/40 text-red-500 bg-red-500/10"
+                        : "border-border text-muted-foreground bg-muted"
+                    }`}>
                       {summary.sentiment}
-                    </Badge>
+                    </span>
                   </div>
                   <p className="text-sm leading-relaxed text-foreground/90">{summary.summary}</p>
                 </div>
 
                 {/* Impact */}
-                {summary.impact && (
-                  <div className="p-4 rounded-xl bg-muted/50 mb-4">
-                    <h3 className="font-semibold text-foreground mb-2 text-sm">Impact</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{summary.impact}</p>
-                  </div>
-                )}
+                {summary.impact && (() => {
+                  const raw = summary.impact.trim()
+                  // Split on newlines; if only one chunk, split on ". " instead
+                  let bullets = raw.split(/\n+/).map(s => s.trim()).filter(Boolean)
+                  if (bullets.length === 1) {
+                    bullets = raw.split(/\.\s+/).map(s => s.trim()).filter(Boolean)
+                      .map((s, i, arr) => i < arr.length - 1 ? s + "." : s)
+                  }
+                  return (
+                    <div className="p-4 rounded-xl bg-muted/50 mb-4">
+                      <h3 className="font-semibold text-foreground mb-3 text-sm">Impact</h3>
+                      <ul className="space-y-2">
+                        {bullets.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+                            <span className="text-sm text-muted-foreground leading-relaxed">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })()}
 
-                {/* Action Hint */}
-                {summary.action_hint && (
-                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 mb-4">
-                    <h3 className="font-semibold text-foreground mb-2 text-sm">What to watch</h3>
-                    <p className="text-sm text-foreground/80 leading-relaxed">{summary.action_hint}</p>
-                  </div>
-                )}
+                {/* What to watch */}
+                {summary.action_hint && (() => {
+                  const raw = summary.action_hint.trim()
+                  let bullets = raw.split(/\n+/).map(s => s.trim()).filter(Boolean)
+                  if (bullets.length === 1) {
+                    bullets = raw.split(/\.\s+/).map(s => s.trim()).filter(Boolean)
+                      .map((s, i, arr) => i < arr.length - 1 ? s + "." : s)
+                  }
+                  return (
+                    <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 mb-4">
+                      <h3 className="font-semibold text-foreground mb-3 text-sm">What to watch</h3>
+                      <ul className="space-y-2">
+                        {bullets.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary flex-shrink-0" />
+                            <span className="text-sm text-foreground/80 leading-relaxed">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                })()}
 
                 {/* Key Stocks */}
                 {summary.key_stocks?.length > 0 && (
@@ -383,7 +467,7 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
                 <span className="text-xs text-muted-foreground">Fetching your chat…</span>
               </div>
             ) : null}
-            <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5 ${chatHistoryLoading ? "hidden" : ""}`}>
+            <div className={`flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-3 ${chatHistoryLoading ? "hidden" : ""}`}>
 
               {/* Welcome state */}
               {chatMessages.length === 0 && (
@@ -478,19 +562,24 @@ export function ArticleDetailScreen({ token, article, onBack }: ArticleDetailScr
 
             {/* Chat Input */}
             <div className="px-4 pb-4">
-              <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-muted border border-border">
-                <input
-                  type="text"
+              <div className="flex items-end gap-2 p-1.5 rounded-2xl bg-muted border border-border">
+                <textarea
+                  rows={1}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                  onChange={(e) => {
+                    setInputValue(e.target.value)
+                    e.target.style.height = "auto"
+                    e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
                   placeholder="Ask anything about this news…"
-                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+                  disabled={chatLoading}
+                  className="flex-1 bg-transparent px-3 py-2 text-sm outline-none resize-none overflow-hidden leading-5 placeholder:text-muted-foreground disabled:opacity-60"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!inputValue.trim() || chatLoading}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90"
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-40 transition-all hover:opacity-90 mb-0.5"
                 >
                   <Send className="h-4 w-4" />
                 </button>

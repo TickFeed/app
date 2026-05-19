@@ -55,19 +55,7 @@ export interface FeedItem {
   sentiment: string | null
   symbol: string | null
   image_url: string | null
-}
-
-export interface TickerItem {
-  symbol: string
-  name: string
-  price: number
-  change: number
-  change_pct: number
-  is_positive: boolean
-  day_open?: number
-  day_high?: number
-  day_low?: number
-  prev_close?: number
+  comments_count: number | null
 }
 
 export interface IndexDigest {
@@ -93,7 +81,6 @@ export interface MarketDigestResponse {
     sentiment: string | null
     key_stocks: string[] | null
   } | null
-  market_ticker: TickerItem[]
 }
 
 export interface ArticleDetail {
@@ -105,6 +92,7 @@ export interface ArticleDetail {
   priority: string
   body: string | null
   created_at: string
+  image_url: string | null
   bookmarked: boolean
 }
 
@@ -120,30 +108,13 @@ export interface ArticleSummary {
 
 export interface WatchlistItem {
   symbol: string
-  price?: number
-  prev_close?: number
-  change?: number
-  change_pct?: number
-  is_positive?: boolean
-  day_high?: number
-  day_low?: number
+  name?: string
   sparkline: number[]
 }
 
 export interface StockDetail {
   symbol: string
   name: string
-  price: number
-  change: number
-  change_pct: number
-  is_positive: boolean
-  prev_close: number
-  open: number | null
-  day_high: number
-  day_low: number
-  week_52_high: number | null
-  week_52_low: number | null
-  volume: number
   sector: string | null
   industry: string | null
   related_news: Array<{
@@ -156,15 +127,6 @@ export interface StockDetail {
   }>
 }
 
-export interface ChartPoint {
-  t: number
-  o: number
-  h: number
-  l: number
-  c: number
-  v: number
-}
-
 export interface StockSearchResult {
   symbol: string
   name: string
@@ -174,12 +136,11 @@ export interface StockSearchResult {
 export interface TrendingStockItem {
   symbol: string
   name: string
-  price: number
-  change: number
-  change_pct: number
-  is_positive: boolean
-  day_high: number
-  day_low: number
+}
+
+export interface PollOption {
+  text: string
+  votes: number
 }
 
 export interface CommunityPost {
@@ -190,12 +151,24 @@ export interface CommunityPost {
   reply_to_id: number | null
   is_bot: boolean
   likes_count: number
+  comments_count: number
+  image_url: string | null
   created_at: string
   author_id: number
   username: string | null
   first_name: string | null
   last_name: string | null
+  avatar_style: string | null
   liked_by_me: boolean
+  is_following: boolean
+  poll_options: PollOption[] | null
+  my_poll_vote: number | null
+}
+
+export interface UploadUrlResponse {
+  sas_url: string
+  blob_url: string
+  expires_in: number
 }
 
 export interface UserSearchResult {
@@ -209,6 +182,19 @@ export interface TrendingTopic {
   topic: string
   count: number
   source: string
+}
+
+export interface AppNotification {
+  id: number
+  type: "mention" | "stock_news"
+  title: string
+  body: string | null
+  read: boolean
+  target_type: "article" | "stock" | "community" | null
+  target_id: string | null
+  target_tab: "discuss" | "ai-summary" | "overview" | "ai-chat" | null
+  source_post_id: number | null
+  created_at: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -236,6 +222,12 @@ const LOGO_COLORS = [
   '#dc2626', '#1e40af', '#0d9488', '#2563eb',
   '#7c3aed', '#f97316', '#1d4ed8', '#059669',
 ]
+
+export function dicebearUrl(style: string | null | undefined, seed: string): string {
+  const s = style && style !== "initials" ? style : null
+  if (!s) return ""
+  return `https://api.dicebear.com/9.x/${s}/svg?seed=${encodeURIComponent(seed)}&size=80`
+}
 
 export function symbolToName(symbol: string): string {
   return NIFTY50_NAMES[symbol] ?? symbol
@@ -307,6 +299,35 @@ export async function getUserStats(token: string): Promise<UserStats> {
   return apiGet('/api/user/stats', token)
 }
 
+export type InteractionHistoryItem =
+  | {
+      type: "article"
+      id: number
+      title: string
+      source: string
+      image_url: string | null
+      published: string | null
+      article_created_at: string
+      interacted_at: string
+      symbol: null
+    }
+  | {
+      type: "stock"
+      id: null
+      title: string | null
+      source: null
+      image_url: null
+      published: null
+      article_created_at: null
+      interacted_at: string
+      symbol: string
+    }
+
+export async function getInteractionHistory(token: string): Promise<InteractionHistoryItem[]> {
+  const res = await apiGet<{ items: InteractionHistoryItem[] }>('/api/user/interaction-history', token)
+  return res.items ?? []
+}
+
 // ── News APIs ─────────────────────────────────────────────────────────────────
 
 export async function getNewsFeed(
@@ -315,6 +336,11 @@ export async function getNewsFeed(
   page = 1,
 ): Promise<FeedItem[]> {
   const res = await apiGet<{ items: FeedItem[] }>(`/api/news/feed?tab=${tab}&page=${page}`, token)
+  return res.items ?? []
+}
+
+export async function searchArticles(token: string, q: string): Promise<FeedItem[]> {
+  const res = await apiGet<{ items: FeedItem[] }>(`/api/news/search?q=${encodeURIComponent(q)}`, token)
   return res.items ?? []
 }
 
@@ -350,10 +376,6 @@ export async function toggleBookmark(
 
 // ── Stock APIs ────────────────────────────────────────────────────────────────
 
-export async function getMarketTicker(token: string): Promise<TickerItem[]> {
-  return apiGet('/api/stocks/market-ticker', token)
-}
-
 export async function getTrendingStocks(token: string): Promise<TrendingStockItem[]> {
   return apiGet('/api/stocks/trending', token)
 }
@@ -364,14 +386,6 @@ export async function searchStocks(token: string, q: string): Promise<StockSearc
 
 export async function getStockDetail(token: string, symbol: string): Promise<StockDetail> {
   return apiGet(`/api/stocks/${symbol}`, token)
-}
-
-export async function getStockChart(
-  token: string,
-  symbol: string,
-  range: '1D' | '1W' | '1M' | '3M' | '1Y' = '1D',
-): Promise<ChartPoint[]> {
-  return apiGet(`/api/stocks/${symbol}/chart?range=${range}`, token)
 }
 
 // ── Watchlist APIs ────────────────────────────────────────────────────────────
@@ -415,8 +429,46 @@ export async function createPost(
   content: string,
   symbol?: string,
   newsId?: number,
+  imageUrl?: string,
+  pollOptions?: string[],
 ): Promise<CommunityPost> {
-  return apiPost('/api/community/posts', token, { content, symbol: symbol ?? null, news_id: newsId ?? null })
+  return apiPost('/api/community/posts', token, {
+    content,
+    symbol: symbol ?? null,
+    news_id: newsId ?? null,
+    image_url: imageUrl ?? null,
+    poll_options: pollOptions ?? null,
+  })
+}
+
+export async function votePoll(
+  token: string,
+  postId: number,
+  optionIdx: number,
+): Promise<{ poll_options: PollOption[]; my_poll_vote: number }> {
+  return apiPost(`/api/community/posts/${postId}/vote`, token, { option_idx: optionIdx })
+}
+
+/** Request a pre-signed SAS URL for direct Azure Blob upload. */
+export async function requestUploadUrl(
+  token: string,
+  uploadType: 'post' | 'avatar',
+  contentType = 'image/jpeg',
+): Promise<UploadUrlResponse> {
+  return apiPost('/api/upload/request', token, { upload_type: uploadType, content_type: contentType })
+}
+
+/** Upload a file directly to Azure Blob using the SAS URL (never goes through our backend). */
+export async function uploadToBlob(sasUrl: string, file: File): Promise<void> {
+  const res = await fetch(sasUrl, {
+    method: 'PUT',
+    headers: {
+      'x-ms-blob-type': 'BlockBlob',
+      'Content-Type': file.type || 'image/jpeg',
+    },
+    body: file,
+  })
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
 }
 
 export async function getStockChatHistory(token: string, symbol: string): Promise<ChatHistoryMessage[]> {
@@ -443,6 +495,43 @@ export async function unlikePost(
   return apiDelete(`/api/community/posts/${id}/like`, token)
 }
 
+export async function getPostComments(token: string, postId: number): Promise<CommunityPost[]> {
+  const res = await apiGet<{ posts: CommunityPost[] }>(`/api/community/posts/${postId}/comments`, token)
+  return res.posts ?? []
+}
+
+export async function searchCommunityPosts(token: string, q: string): Promise<CommunityPost[]> {
+  const res = await apiGet<{ posts: CommunityPost[] }>(`/api/community/posts/search?q=${encodeURIComponent(q)}`, token)
+  return res.posts ?? []
+}
+
+export async function followUser(token: string, userId: number): Promise<{ following: boolean }> {
+  return apiPost(`/api/users/${userId}/follow`, token)
+}
+
+export async function unfollowUser(token: string, userId: number): Promise<{ following: boolean }> {
+  return apiDelete(`/api/users/${userId}/follow`, token)
+}
+
 export async function getTrendingTopics(token: string): Promise<TrendingTopic[]> {
   return apiGet('/api/community/trending-topics', token)
+}
+
+// ── Notification APIs ─────────────────────────────────────────────────────────
+
+export async function getNotifications(token: string, limit = 50): Promise<AppNotification[]> {
+  return apiGet(`/api/notifications?limit=${limit}`, token)
+}
+
+export async function getUnreadCount(token: string): Promise<number> {
+  const res = await apiGet<{ count: number }>('/api/notifications/unread-count', token)
+  return res.count
+}
+
+export async function markNotificationsRead(token: string, ids: number[]): Promise<{ unread_count: number }> {
+  return apiPost('/api/notifications/read', token, { ids })
+}
+
+export async function markAllNotificationsRead(token: string): Promise<{ unread_count: number }> {
+  return apiPost('/api/notifications/read-all', token)
 }

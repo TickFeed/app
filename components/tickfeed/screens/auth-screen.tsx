@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { Loader2, Mail } from "lucide-react"
+import { Loader2, Mail, Zap, BarChart2, Users, Bell, BookOpen, TrendingUp, MessageSquare } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -92,19 +92,15 @@ export function AuthScreen({
     return { title: "", description: "Market News. Smart Insights. In Your Feed." }
   })()
 
-  const TICKERS = [
-    { symbol: "NIFTY 50",  change: "+0.82%", up: true  },
-    { symbol: "SENSEX",    change: "+0.71%", up: true  },
-    { symbol: "HDFCBANK",  change: "+1.28%", up: true  },
-    { symbol: "TCS",       change: "+2.18%", up: true  },
-    { symbol: "RELIANCE",  change: "-0.28%", up: false },
-    { symbol: "INFY",      change: "+1.02%", up: true  },
-    { symbol: "ICICIBANK", change: "+0.65%", up: true  },
-    { symbol: "WIPRO",     change: "+1.45%", up: true  },
-    { symbol: "BAJFINANCE",change: "-0.43%", up: false },
-    { symbol: "AXISBANK",  change: "+0.91%", up: true  },
-    { symbol: "ADANIENT",  change: "-1.12%", up: false },
-    { symbol: "MARUTI",    change: "+0.58%", up: true  },
+  const FEATURES = [
+    { icon: Zap,            label: "AI-Powered Summaries"      },
+    { icon: TrendingUp,     label: "NSE & BSE Live Updates"    },
+    { icon: BarChart2,      label: "Market Digest"             },
+    { icon: Bell,           label: "Watchlist Alerts"          },
+    { icon: MessageSquare,  label: "Community Discussions"     },
+    { icon: Zap,            label: "Zero Noise. Just Insights" },
+    { icon: BookOpen,       label: "In-depth Analysis"         },
+    { icon: Users,          label: "Follow Top Investors"      },
   ]
 
   return (
@@ -128,21 +124,17 @@ export function AuthScreen({
             )}
           </div>
 
-          {/* Scrolling ticker strip */}
+          {/* Scrolling feature strip */}
           <div className="mb-5 overflow-hidden rounded-xl border border-border/30 bg-card/60 py-2.5 backdrop-blur-sm">
             <div
               className="flex w-max items-center"
-              style={{ animation: "ticker 32s linear infinite" }}
+              style={{ animation: "ticker 36s linear infinite" }}
             >
-              {[...TICKERS, ...TICKERS].map((t, i) => (
-                <span key={i} className="flex shrink-0 items-center">
-                  <span className="px-4 text-xs font-semibold tracking-wide text-foreground/70">
-                    {t.symbol}
-                  </span>
-                  <span className={`text-xs font-medium ${t.up ? "text-emerald-400" : "text-red-400"}`}>
-                    {t.change}
-                  </span>
-                  <span className="ml-4 text-border/40 select-none">|</span>
+              {[...FEATURES, ...FEATURES].map((f, i) => (
+                <span key={i} className="flex shrink-0 items-center gap-1.5 px-4">
+                  <f.icon className="h-3 w-3 shrink-0 text-primary" />
+                  <span className="text-xs font-medium tracking-wide text-foreground/70">{f.label}</span>
+                  <span className="ml-3 text-border/40 select-none">·</span>
                 </span>
               ))}
             </div>

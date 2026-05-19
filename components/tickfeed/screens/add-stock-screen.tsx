@@ -1,14 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { ArrowLeft, Search, Plus, Check, TrendingUp, TrendingDown, Loader2 } from "lucide-react"
+import { ArrowLeft, Search, Plus, Check, TrendingUp, Loader2 } from "lucide-react"
 import {
   searchStocks,
   getTrendingStocks,
   getWatchlist,
   addToWatchlist,
-  formatPrice,
-  formatChangePct,
   symbolToColor,
   symbolToLogo,
   symbolToName,
@@ -200,9 +198,6 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
                     key={item.symbol}
                     symbol={item.symbol}
                     name={item.name}
-                    price={formatPrice(item.price)}
-                    change={formatChangePct(item.change_pct)}
-                    isPositive={item.is_positive}
                     isExisting={isExisting(item.symbol)}
                     isSelected={isSelected(item.symbol)}
                     onToggle={() => handleToggle(item.symbol)}
@@ -256,18 +251,12 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
 function StockRow({
   symbol,
   name,
-  price,
-  change,
-  isPositive,
   isExisting,
   isSelected,
   onToggle,
 }: {
   symbol: string
   name: string
-  price?: string
-  change?: string
-  isPositive?: boolean
   isExisting: boolean
   isSelected: boolean
   onToggle: () => void
@@ -292,27 +281,16 @@ function StockRow({
           <p className="text-xs text-muted-foreground">{displayName}</p>
         </div>
       </div>
-      <div className="flex items-center gap-3">
-        {price && change != null && isPositive != null && (
-          <div className="text-right">
-            <p className="font-semibold text-foreground text-sm">{price}</p>
-            <p className={`text-xs flex items-center justify-end gap-0.5 ${isPositive ? "text-gain" : "text-loss"}`}>
-              {isPositive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-              {isPositive ? "+" : "-"}{change}
-            </p>
-          </div>
-        )}
-        <div
-          className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-            isExisting
-              ? "bg-primary/20 text-primary"
-              : isSelected
-              ? "bg-primary text-primary-foreground"
-              : "bg-muted text-muted-foreground"
-          }`}
-        >
-          <Check className="h-4 w-4" />
-        </div>
+      <div
+        className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+          isExisting
+            ? "bg-primary/20 text-primary"
+            : isSelected
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground"
+        }`}
+      >
+        <Check className="h-4 w-4" />
       </div>
     </div>
   )

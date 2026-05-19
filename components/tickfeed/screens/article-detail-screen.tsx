@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react"
 import {
   ChevronLeft,
-  MoreVertical,
+  Share2,
   ThumbsUp,
   ThumbsDown,
   Sparkles,
@@ -22,6 +22,7 @@ import {
   type ArticleSummary,
 } from "@/lib/api"
 import { DiscussTab } from "@/components/tickfeed/discuss-tab"
+import { toast } from "@/hooks/use-toast"
 
 interface ArticleDetailScreenProps {
   token: string
@@ -174,6 +175,25 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
     { id: "discussions" as TabType, label: "Discuss", icon: MessageSquare, count: null },
   ]
 
+  const handleShare = async () => {
+    const appUrl = `${window.location.origin}/news/${numericId}`
+    const title  = article.headline
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title, url: appUrl })
+      } catch {
+        // user cancelled — ignore
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(appUrl)
+        toast({ title: "Link copied", description: "Article link copied to clipboard." })
+      } catch {
+        toast({ title: "Share", description: appUrl })
+      }
+    }
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
       {/* Header */}
@@ -185,8 +205,11 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
           <ChevronLeft className="h-6 w-6" />
         </button>
         <h1 className="text-base font-semibold text-foreground">Article</h1>
-        <button className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-          <MoreVertical className="h-5 w-5" />
+        <button
+          onClick={handleShare}
+          className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          <Share2 className="h-5 w-5" />
         </button>
       </header>
 

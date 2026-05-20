@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-const PULL_THRESHOLD = 64   // raw px the user must drag to trigger refresh
+const PULL_THRESHOLD = 110  // raw px the user must drag to trigger refresh
 const MAX_VISUAL     = 48   // max px of the indicator bar height
 const RESISTANCE     = 0.5  // pull feels heavier than 1:1
 

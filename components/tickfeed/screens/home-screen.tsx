@@ -84,6 +84,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   }
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if ((e.target as Element).closest("[data-no-swipe]")) return
     swipeStartX.current = e.touches[0].clientX
     swipeStartY.current = e.touches[0].clientY
   }, [])
@@ -237,8 +238,8 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
             key={t.tab}
             onClick={() => "focus" in t && t.focus ? enterFocusMode() : setActiveTab(i)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-              "focus" in t && t.focus
-                ? "bg-gradient-to-r from-primary to-violet-600 text-white shadow-md shadow-primary/30"
+              activeTab === i && "focus" in t && t.focus
+                ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md shadow-emerald-500/30"
                 : activeTab === i
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
@@ -253,7 +254,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
       <div ref={scrollRef} className="flex-1 overflow-y-auto pb-4 scrollbar-hide">
         {/* Market Digest — For You only */}
         {activeTab === 0 && (digestHeadline || digestBrief || Object.keys(indexDigests).length > 0) && (
-          <div className="px-4 pb-4">
+          <div className="px-4 pb-4" data-no-swipe>
             <MarketDigest
               headline={digestHeadline}
               brief={digestBrief}
@@ -271,13 +272,15 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                 {activeTab === 0 && "Top News"}
                 {activeTab === 1 && "Your Stock Updates"}
               </h2>
-              <button
-                onClick={enterFocusMode}
-                className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
-              >
-                Focus mode
-                <Layers className="h-3.5 w-3.5" />
-              </button>
+              {activeTab === 0 && (
+                <button
+                  onClick={enterFocusMode}
+                  className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+                >
+                  Focus mode
+                  <Layers className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           )}
 

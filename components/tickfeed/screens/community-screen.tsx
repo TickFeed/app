@@ -5,17 +5,18 @@ import React, {
 } from "react"
 import {
   Search, TrendingUp, X, Plus, Heart, MessageCircle,
-  RefreshCw, Bot, Image as ImageIcon, BarChart2, ChevronLeft, Send, AlertCircle, Share2,
+  RefreshCw, Bot, Image as ImageIcon, BarChart2, ChevronLeft, Send, AlertCircle, Share2, Zap,
+  MoreVertical, Trash2, Flag,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import {
   getCommunityPosts, createPost, likePost, unlikePost,
   getPostComments, searchCommunityPosts, followUser, unfollowUser,
-  getTrendingTopics, dicebearUrl,
-  requestUploadUrl, uploadToBlob, votePoll,
+  dicebearUrl, getUserPublicProfile, getPostById,
+  requestUploadUrl, uploadToBlob, votePoll, deletePost, reportPost,
   formatRelativeTime, API_BASE,
-  type CommunityPost, type TrendingTopic,
+  type CommunityPost, type PublicUserProfile,
 } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
@@ -184,8 +185,10 @@ export function PollDisplay({
   const hasVoted = post.my_poll_vote != null
   const [voting, setVoting] = useState<number | null>(null)
 
-  const handleVote = async (idx: number) => {
-    if (voting !== null || hasVoted || !onVoted) return
+  const handleVote = async (e: React.MouseEvent, idx: number) => {
+    e.stopPropagation()
+    if (voting !== null || !onVoted) return
+    if (post.my_poll_vote === idx) return  // same option — no-op
     setVoting(idx)
     try {
       const res = await votePoll(token, post.id, idx)
@@ -195,17 +198,17 @@ export function PollDisplay({
   }
 
   return (
-    <div className="mt-3 space-y-2">
+    <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
       {opts.map((opt, idx) => {
         const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0
         const isChosen = post.my_poll_vote === idx
         return (
           <button
             key={idx}
-            onClick={() => handleVote(idx)}
-            disabled={hasVoted || voting !== null}
+            onClick={(e) => handleVote(e, idx)}
+            disabled={voting !== null}
             className={`relative w-full rounded-xl border px-3 py-2.5 text-left text-sm font-medium transition-colors overflow-hidden ${
-              isChosen ? "border-primary text-primary" : "border-border text-foreground hover:border-primary/50 disabled:hover:border-border"
+              isChosen ? "border-primary text-primary" : "border-border text-foreground hover:border-primary/50"
             }`}
           >
             {hasVoted && (
@@ -224,8 +227,137 @@ export function PollDisplay({
         )
       })}
       <p className="text-[11px] text-muted-foreground pl-1">
-        {total} {total === 1 ? "vote" : "votes"}{hasVoted ? " · voted" : ""}
+        {total} {total === 1 ? "vote" : "votes"}{hasVoted ? " · tap to change" : ""}
       </p>
+    </div>
+  )
+}
+
+// ── Post action sheet (three-dot menu) ────────────────────────────────────
+
+const REPORT_REASONS = [
+  { id: "spam",          label: "Spam"                     },
+  { id: "misinformation",label: "Misinformation"           },
+  { id: "inappropriate", label: "Inappropriate content"    },
+  { id: "harassment",    label: "Harassment or hate speech"},
+  { id: "other",         label: "Other"                    },
+]
+
+function PostMenuSheet({
+  isOwn, onClose, onDelete, onReport,
+}: { isOwn: boolean; onClose: () => void; onDelete?: () => void; onReport?: (reason: string) => void }) {
+  const [step, setStep] = useState<"main" | "reason" | "other">("main")
+  const [otherText, setOtherText] = useState("")
+  const otherRef = React.useRef<HTMLTextAreaElement>(null)
+
+  const goToOther = () => {
+    setStep("other")
+    setTimeout(() => otherRef.current?.focus(), 80)
+  }
+
+  return (
+    <div className="fixed inset-0 z-[400] flex flex-col justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div className="relative bg-background rounded-t-2xl px-4 pb-10 pt-3" onClick={(e) => e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full bg-muted mx-auto mb-4" />
+
+        {step === "main" && (
+          <>
+            {isOwn ? (
+              <button
+                onClick={() => { onDelete?.(); onClose() }}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Trash2 className="h-5 w-5 shrink-0" />
+                <span className="font-semibold">Delete Post</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep("reason")}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-destructive hover:bg-destructive/10 transition-colors"
+              >
+                <Flag className="h-5 w-5 shrink-0" />
+                <span className="font-semibold">Report Post</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="mt-1 flex w-full items-center justify-center rounded-xl px-4 py-3.5 font-semibold text-muted-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        )}
+
+        {step === "reason" && (
+          <>
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => setStep("main")}
+                className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <p className="font-bold text-foreground">Why are you reporting this?</p>
+            </div>
+            <div className="space-y-0.5">
+              {REPORT_REASONS.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => r.id === "other" ? goToOther() : (onReport?.(r.id), onClose())}
+                  className="flex w-full items-center justify-between rounded-xl px-4 py-3 hover:bg-muted transition-colors"
+                >
+                  <span className="text-sm font-medium text-foreground">{r.label}</span>
+                  {r.id === "other" && <ChevronLeft className="h-4 w-4 rotate-180 text-muted-foreground" />}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={onClose}
+              className="mt-2 flex w-full items-center justify-center rounded-xl px-4 py-3 font-semibold text-muted-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        )}
+
+        {step === "other" && (
+          <>
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => setStep("reason")}
+                className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <p className="font-bold text-foreground">Tell us what's wrong</p>
+            </div>
+            <textarea
+              ref={otherRef}
+              value={otherText}
+              onChange={(e) => setOtherText(e.target.value)}
+              placeholder="Describe the issue…"
+              maxLength={300}
+              rows={4}
+              className="w-full rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+            />
+            <p className="text-right text-[11px] text-muted-foreground mt-1 mb-3">{otherText.length}/300</p>
+            <button
+              onClick={() => { if (otherText.trim()) { onReport?.(`other: ${otherText.trim()}`); onClose() } }}
+              disabled={!otherText.trim()}
+              className="flex w-full items-center justify-center rounded-full bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-40 transition-all active:scale-[0.98]"
+            >
+              Submit Report
+            </button>
+            <button
+              onClick={onClose}
+              className="mt-2 flex w-full items-center justify-center rounded-xl px-4 py-3 font-semibold text-muted-foreground hover:bg-muted transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        )}
+      </div>
     </div>
   )
 }
@@ -241,15 +373,19 @@ interface PostCardProps {
   onFollow: (post: CommunityPost) => void
   onReply?: (post: CommunityPost) => void   // only provided inside CommentsSheet
   onVoted?: (updated: CommunityPost) => void
+  onUserClick?: (userId: number) => void
+  onDelete?: (post: CommunityPost) => void
+  onReport?: (post: CommunityPost, reason: string) => void
   compact?: boolean
 }
 
-function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply, onVoted, compact }: PostCardProps) {
+function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply, onVoted, onUserClick, onDelete, onReport, compact }: PostCardProps) {
   const isMe = post.author_id === myUserId
   const initials = authorInitials(post)
   const name = authorName(post)
   const time = formatRelativeTime(post.created_at)
   const avatarSrc = dicebearUrl(post.avatar_style, post.username ?? "")
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const handleShare = async () => {
     const url = `${window.location.origin}/?post=${post.id}`
@@ -262,13 +398,25 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
   }
 
   return (
-    <article
-      className="border-b border-border/50 px-4 py-6 hover:bg-muted/20 active:bg-muted/30 transition-colors cursor-pointer"
-      onClick={() => !compact && onComment(post)}
-    >
+    <>
+      {menuOpen && (
+        <PostMenuSheet
+          isOwn={isMe}
+          onClose={() => setMenuOpen(false)}
+          onDelete={onDelete ? () => onDelete(post) : undefined}
+          onReport={onReport ? (reason) => onReport(post, reason) : undefined}
+        />
+      )}
+      <article
+        className="border-b border-border/50 px-4 py-6 hover:bg-muted/20 active:bg-muted/30 transition-colors cursor-pointer"
+        onClick={() => !compact && onComment(post)}
+      >
       <div className="flex items-start gap-3">
         {/* Avatar */}
-        <Avatar className="h-10 w-10 shrink-0">
+        <Avatar
+          className={`h-10 w-10 shrink-0 ${!post.is_bot ? "cursor-pointer" : ""}`}
+          onClick={(e) => { if (post.is_bot) return; e.stopPropagation(); onUserClick?.(post.author_id) }}
+        >
           {avatarSrc && <AvatarImage src={avatarSrc} alt={initials} />}
           <AvatarFallback className={`text-sm font-bold ${post.is_bot ? "bg-primary text-primary-foreground" : "bg-primary/10 text-primary"}`}>
             {post.is_bot ? <Bot className="h-4 w-4" /> : initials}
@@ -280,7 +428,10 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-semibold text-sm text-foreground truncate">{name}</span>
+                <span
+                  className={`font-semibold text-sm text-foreground truncate ${!post.is_bot ? "cursor-pointer hover:underline" : ""}`}
+                  onClick={(e) => { if (post.is_bot) return; e.stopPropagation(); onUserClick?.(post.author_id) }}
+                >{name}</span>
                 {post.is_bot && (
                   <span className="shrink-0 bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">AI</span>
                 )}
@@ -290,20 +441,39 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
               </p>
             </div>
 
-            {/* Follow button — never for yourself, never for bot */}
-            {!isMe && !post.is_bot && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onFollow(post) }}
-                className={`shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  post.is_following
-                    ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
-                    : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                }`}
-              >
-                {post.is_following ? "Following" : "Follow"}
-              </button>
-            )}
+            <div className="flex items-center gap-1 shrink-0">
+              {/* Follow button — never for yourself, never for bot */}
+              {!isMe && !post.is_bot && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onFollow(post) }}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                    post.is_following
+                      ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                      : "border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                  }`}
+                >
+                  {post.is_following ? "Following" : "Follow"}
+                </button>
+              )}
+              {/* Three-dot menu — not for bots */}
+              {!post.is_bot && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(true) }}
+                  className="rounded-full p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Hidden notice — only visible to the post owner */}
+          {post.is_hidden && isMe && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-destructive/10 border border-destructive/20 px-2.5 py-1.5">
+              <Flag className="h-3 w-3 text-destructive shrink-0" />
+              <span className="text-[11px] font-semibold text-destructive">Hidden by reports — only you can see this</span>
+            </div>
+          )}
 
           {/* Content */}
           {!compact && (
@@ -387,7 +557,8 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
           )}
         </div>
       </div>
-    </article>
+      </article>
+    </>
   )
 }
 
@@ -631,9 +802,10 @@ interface CommentsSheetProps {
   myUserId: number | null
   onClose: (finalCommentCount: number) => void
   initialTickrPending?: boolean
+  onUserClick?: (userId: number) => void
 }
 
-export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = false }: CommentsSheetProps) {
+export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = false, onUserClick }: CommentsSheetProps) {
   const [rootPost, setRootPost] = useState(post)
   const [comments, setComments] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(true)
@@ -855,6 +1027,43 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
 
   const noop = () => {}
 
+  const handleReplyDelete = useCallback(async (target: CommunityPost) => {
+    setComments((prev) => prev.filter((c) => c.id !== target.id))
+    try {
+      await deletePost(token, target.id)
+      toast({ title: "Reply deleted" })
+    } catch {
+      setComments((prev) => [...prev, target].sort((a, b) => a.id - b.id))
+      toast({ title: "Could not delete reply", description: "Please try again." })
+    }
+  }, [token])
+
+  const handleReplyReport = useCallback(async (target: CommunityPost, reason: string) => {
+    try {
+      await reportPost(token, target.id, reason)
+      toast({ title: "Post reported", description: "Thanks for keeping the community safe." })
+    } catch {
+      toast({ title: "Could not send report", description: "Please try again." })
+    }
+  }, [token])
+
+  const handleFollow = useCallback(async (post: CommunityPost) => {
+    const wasFollowing = post.is_following
+    const toggle = (p: CommunityPost) =>
+      p.author_id === post.author_id ? { ...p, is_following: !p.is_following } : p
+    setRootPost((p) => toggle(p))
+    setComments((prev) => prev.map(toggle))
+    try {
+      if (wasFollowing) await unfollowUser(token, post.author_id)
+      else await followUser(token, post.author_id)
+    } catch {
+      const revert = (p: CommunityPost) =>
+        p.author_id === post.author_id ? { ...p, is_following: wasFollowing } : p
+      setRootPost((p) => revert(p))
+      setComments((prev) => prev.map(revert))
+    }
+  }, [token])
+
   return (
     /* Full-screen slide-up over the community feed */
     <div className="fixed inset-0 z-[200] bg-background flex flex-col">
@@ -881,7 +1090,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
       <div className="flex-1 overflow-y-auto min-h-0">
         {/* Original post (compact) */}
         <div className="bg-muted/20 border-b border-border/60">
-          <PostCard post={rootPost} myUserId={myUserId} token={token} onLike={handleRootLike} onComment={noop} onFollow={noop} onVoted={handleRootVoted} />
+          <PostCard post={rootPost} myUserId={myUserId} token={token} onLike={handleRootLike} onComment={noop} onFollow={handleFollow} onVoted={handleRootVoted} onUserClick={onUserClick} onDelete={handleReplyDelete} onReport={handleReplyReport} />
         </div>
 
         {/* "Replies" label */}
@@ -929,9 +1138,12 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
                       token={token}
                       onLike={handleReplyLike}
                       onComment={noop}
-                      onFollow={noop}
+                      onFollow={handleFollow}
                       onReply={handleReplyTo}
                       onVoted={handleReplyVoted}
+                      onUserClick={onUserClick}
+                      onDelete={handleReplyDelete}
+                      onReport={handleReplyReport}
                     />
                   ) : (
                     <div className="flex">
@@ -947,9 +1159,12 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
                           token={token}
                           onLike={handleReplyLike}
                           onComment={noop}
-                          onFollow={noop}
+                          onFollow={handleFollow}
                           onReply={depth < 2 ? handleReplyTo : undefined}
                           onVoted={handleReplyVoted}
+                          onUserClick={onUserClick}
+                          onDelete={handleReplyDelete}
+                          onReport={handleReplyReport}
                         />
                       </div>
                     </div>
@@ -1052,6 +1267,23 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
   )
 }
 
+// ── Alpha Score (shared with profile-screen) ──────────────────────────────
+function calcAlphaScore(posts: number, likes: number, followers: number) {
+  return posts * 15 + likes * 8 + followers * 25
+}
+const ALPHA_TIERS = [
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
+  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
+  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
+  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
+  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted",     border: "border-border"        },
+]
+function alphaTier(score: number) {
+  return ALPHA_TIERS.find((t) => score >= t.min) ?? ALPHA_TIERS[ALPHA_TIERS.length - 1]
+}
+
 // ── Main community screen ──────────────────────────────────────────────────
 
 const TABS = [
@@ -1060,14 +1292,13 @@ const TABS = [
   { label: "My Posts",  tab: "mine"      as const },
 ]
 
-interface CommunityScreenProps { token: string }
+interface CommunityScreenProps { token: string; initialPostId?: number }
 
-export function CommunityScreen({ token }: CommunityScreenProps) {
+export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) {
   const myUserId = getMyUserId(token)
 
   const [activeTab,   setActiveTab]   = useState(0)
   const [posts,       setPosts]       = useState<CommunityPost[]>([])
-  const [topics,      setTopics]      = useState<TrendingTopic[]>([])
   const [loading,     setLoading]     = useState(true)
   const [error,       setError]       = useState("")
 
@@ -1079,6 +1310,9 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
   const [composeOpen,   setComposeOpen]   = useState(false)
   const [selectedPost,  setSelectedPost]  = useState<CommunityPost | null>(null)
   const [newPostCount,  setNewPostCount]  = useState(0)
+
+  const [profileUser,   setProfileUser]   = useState<PublicUserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
 
   const searchRef  = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1098,15 +1332,10 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
     }
   }, [token])
 
-  const fetchTopics = useCallback(async () => {
-    try { setTopics(await getTrendingTopics(token)) } catch {}
-  }, [token])
-
   useEffect(() => {
     fetchPosts(activeTab)
-    fetchTopics()
     setNewPostCount(0)
-  }, [activeTab, fetchPosts, fetchTopics])
+  }, [activeTab, fetchPosts])
 
   // SSE subscription — listen for new top-level posts
   useEffect(() => {
@@ -1126,10 +1355,20 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
+  // ── Deep-link: open specific post from shared URL ───────────────────
+  const initialPostHandled = useRef(false)
+  useEffect(() => {
+    if (!initialPostId || initialPostHandled.current || !token) return
+    initialPostHandled.current = true
+    getPostById(token, initialPostId)
+      .then((post) => setSelectedPost(post))
+      .catch(() => {})
+  }, [initialPostId, token])
+
   // ── Pull-to-refresh ─────────────────────────────────────────────────
   const handlePullRefresh = useCallback(async () => {
-    await Promise.all([fetchPosts(activeTab), fetchTopics()])
-  }, [activeTab, fetchPosts, fetchTopics])
+    await fetchPosts(activeTab)
+  }, [activeTab, fetchPosts])
   const { pullState } = usePullToRefresh(scrollRef, handlePullRefresh)
 
   // ── Search ───────────────────────────────────────────────────────────
@@ -1194,6 +1433,28 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
     }
   }
 
+  // ── Delete own post ──────────────────────────────────────────────────
+  const handleDelete = async (post: CommunityPost) => {
+    setPosts((prev) => prev.filter((p) => p.id !== post.id))
+    try {
+      await deletePost(token, post.id)
+      toast({ title: "Post deleted" })
+    } catch {
+      setPosts((prev) => [post, ...prev])
+      toast({ title: "Could not delete post", description: "Please try again." })
+    }
+  }
+
+  // ── Report a post ─────────────────────────────────────────────────────
+  const handleReport = async (post: CommunityPost, reason: string) => {
+    try {
+      await reportPost(token, post.id, reason)
+      toast({ title: "Post reported", description: "Thanks for keeping the community safe." })
+    } catch {
+      toast({ title: "Could not send report", description: "Please try again." })
+    }
+  }
+
   // ── Poll vote propagation ────────────────────────────────────────────
   const handleVoted = (updated: CommunityPost) => {
     setPosts((prev) => prev.map((p) => p.id === updated.id ? updated : p))
@@ -1202,12 +1463,39 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
 
   // ── Post created (own) ───────────────────────────────────────────────
   const handlePosted = (created: CommunityPost) => {
-    setPosts((prev) => [created, ...prev])
-    setNewPostCount(0)   // own post — reset banner so we don't double-count
+    if (activeTab === 2) {
+      // Already on My Posts — prepend optimistically
+      setPosts((prev) => [created, ...prev])
+    } else {
+      // Switching to My Posts — useEffect will fetch the full list
+      setActiveTab(2)
+    }
+    setNewPostCount(0)
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
     toast({ title: "Posted!", description: "Your post is live on the community." })
-    // If post mentions @tickr, open its comments immediately so user sees the AI reply come in
     if (/@tickr\b/i.test(created.content)) setSelectedPost(created)
+  }
+
+  // ── User profile click ───────────────────────────────────────────────
+  const handleUserClick = useCallback(async (userId: number) => {
+    setProfileLoading(true)
+    try {
+      const p = await getUserPublicProfile(token, userId)
+      setProfileUser(p)
+    } catch {}
+    finally { setProfileLoading(false) }
+  }, [token])
+
+  const handleProfileFollow = async () => {
+    if (!profileUser) return
+    const wasFollowing = profileUser.is_following
+    setProfileUser((p) => p ? { ...p, is_following: !p.is_following, followers_count: p.followers_count + (wasFollowing ? -1 : 1) } : p)
+    try {
+      if (wasFollowing) await unfollowUser(token, profileUser.id)
+      else await followUser(token, profileUser.id)
+    } catch {
+      setProfileUser((p) => p ? { ...p, is_following: wasFollowing, followers_count: p.followers_count + (wasFollowing ? 1 : -1) } : p)
+    }
   }
 
   // ── Load new posts from banner tap ───────────────────────────────────
@@ -1262,23 +1550,6 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
         )}
       </header>
 
-      {/* ── Trending topic chips (hidden during search) ── */}
-      {!searchOpen && topics.length > 0 && (
-        <div className="px-4 py-2.5 border-b border-border/50 overflow-x-auto scrollbar-hide">
-          <div className="flex items-center gap-2 min-w-max">
-            <TrendingUp className="h-3.5 w-3.5 text-primary shrink-0" />
-            {topics.slice(0, 8).map((t) => (
-              <button
-                key={t.topic}
-                onClick={() => { openSearch(); handleSearchChange("#" + t.topic) }}
-                className="rounded-full border border-border bg-muted/60 px-3 py-1 text-xs font-medium text-foreground hover:bg-muted transition-colors whitespace-nowrap"
-              >
-                #{t.topic}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Tabs (hidden during search) ── */}
       {!searchOpen && (
@@ -1382,6 +1653,9 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
               onComment={setSelectedPost}
               onFollow={handleFollow}
               onVoted={handleVoted}
+              onUserClick={handleUserClick}
+              onDelete={handleDelete}
+              onReport={handleReport}
             />
           ))
         )}
@@ -1407,6 +1681,90 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
         />
       )}
 
+      {/* ── User profile overlay ── */}
+      {(profileUser || profileLoading) && (
+        <div className="fixed inset-0 z-[300] flex flex-col bg-background">
+          {/* Header */}
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+            <button
+              onClick={() => setProfileUser(null)}
+              className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h2 className="font-bold text-base text-foreground">Profile</h2>
+          </div>
+
+          {profileLoading && !profileUser ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full border-2 border-border border-t-primary animate-spin" />
+            </div>
+          ) : profileUser ? (() => {
+            const pName = [profileUser.first_name, profileUser.last_name].filter(Boolean).join(" ") || profileUser.username || "User"
+            const pInitials = profileUser.first_name
+              ? (profileUser.first_name[0] + (profileUser.last_name?.[0] ?? "")).toUpperCase()
+              : (profileUser.username ?? "?").slice(0, 2).toUpperCase()
+            const avatarSrc = dicebearUrl(profileUser.avatar_style, profileUser.username ?? "")
+            const score = calcAlphaScore(profileUser.posts_count, profileUser.likes_received, profileUser.followers_count)
+            const tier = alphaTier(score)
+            const isOwnProfile = profileUser.id === myUserId
+            return (
+              <div className="flex-1 overflow-y-auto">
+                {/* Avatar + name hero */}
+                <div className="flex flex-col items-center pt-10 pb-6 px-6 text-center">
+                  <Avatar className="h-24 w-24 mb-4">
+                    {avatarSrc && <AvatarImage src={avatarSrc} alt={pInitials} />}
+                    <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">{pInitials}</AvatarFallback>
+                  </Avatar>
+                  <h3 className="text-xl font-black text-foreground">{pName}</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">@{profileUser.username ?? "user"}</p>
+
+                  {/* Follow button */}
+                  {!isOwnProfile && (
+                    <button
+                      onClick={handleProfileFollow}
+                      className={`mt-4 rounded-full border px-6 py-2 text-sm font-bold transition-colors ${
+                        profileUser.is_following
+                          ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                          : "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                      }`}
+                    >
+                      {profileUser.is_following ? "Following" : "Follow"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Alpha score card */}
+                <div className={`mx-4 mb-4 rounded-2xl border p-4 ${tier.bg} ${tier.border}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className={`h-4 w-4 ${tier.color}`} />
+                      <span className={`text-sm font-bold ${tier.color}`}>{tier.label}</span>
+                    </div>
+                    <span className={`text-lg font-black ${tier.color}`}>{score.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">Alpha Score</p>
+                </div>
+
+                {/* Stats row */}
+                <div className="mx-4 grid grid-cols-3 gap-3 mb-6">
+                  {[
+                    { label: "Posts",     value: profileUser.posts_count },
+                    { label: "Followers", value: profileUser.followers_count },
+                    { label: "Following", value: profileUser.following_count },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-2xl bg-muted/50 border border-border/50 p-3 text-center">
+                      <p className="text-lg font-black text-foreground">{value}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })() : null}
+        </div>
+      )}
+
       {/* ── Comments sheet ── */}
       {selectedPost && (
         <CommentsSheet
@@ -1414,6 +1772,7 @@ export function CommunityScreen({ token }: CommunityScreenProps) {
           token={token}
           myUserId={myUserId}
           initialTickrPending={/@tickr\b/i.test(selectedPost.content) && selectedPost.comments_count === 0}
+          onUserClick={handleUserClick}
           onClose={(finalCount) => {
             setPosts((prev) =>
               prev.map((p) =>

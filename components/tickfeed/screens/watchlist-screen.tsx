@@ -198,7 +198,7 @@ export function WatchlistScreen({ token, onStockClick, onAddStock }: WatchlistSc
                     : <Circle className="h-5 w-5 text-muted-foreground/50" />}
                 </button>
               )}
-              <div className={`flex-1 ${editMode ? "pl-8" : ""} ${editMode && selected.has(stock.symbol) ? "bg-primary/5" : ""}`}>
+              <div className={`flex-1 min-w-0 ${editMode ? "pl-8" : ""} ${editMode && selected.has(stock.symbol) ? "bg-primary/5" : ""}`}>
                 <StockCard
                   symbol={stock.symbol}
                   name={stock.name}

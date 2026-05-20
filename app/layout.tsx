@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Toaster } from '@/components/ui/toaster'
 import { Providers } from '@/components/providers'
+import Script from 'next/script'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -41,6 +42,11 @@ export default function RootLayout({
   return (
     <html lang="en" className="bg-background">
       <body className="h-full bg-background font-sans antialiased">
+        <Script id="sw-register" strategy="afterInteractive">{`
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function(){})
+          }
+        `}</Script>
         <Providers>
           {children}
           <Toaster />

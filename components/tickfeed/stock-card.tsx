@@ -22,7 +22,7 @@ export function StockCard({
   return (
     <div
       onClick={onClick}
-      className="group cursor-pointer border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/30"
+      className="group cursor-pointer border-b border-border/50 px-4 py-3 transition-colors hover:bg-muted/30 overflow-hidden"
     >
       <div className="flex items-center gap-3">
         {/* Logo */}

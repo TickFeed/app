@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { usePushNotifications } from "@/lib/push"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -70,6 +71,7 @@ export default function TickFeedApp() {
   const [articleInitialTab, setArticleInitialTab] = useState<"ai-summary" | "ai-chat" | "discussions" | undefined>(undefined)
   const [stockInitialTab, setStockInitialTab] = useState<"overview" | "ai-chat" | "discuss" | undefined>(undefined)
   const [preArticlePreviousScreen, setPreArticlePreviousScreen] = useState<Screen>("home")
+  const [initialCommunityPostId, setInitialCommunityPostId] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -320,6 +322,60 @@ export default function TickFeedApp() {
 
   const token = authSession?.token ?? ""
 
+  // Register device for Web Push when authenticated
+  usePushNotifications(authSession ? token : null)
+
+  // Handle notification deep-links: ?post=ID, ?article=ID&tab=TAB, ?stock=SYM&tab=TAB
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (!authSession || deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const postId = params.get("post")
+    const articleId = params.get("article")
+    const stockSym = params.get("stock")
+    const tab = params.get("tab") ?? undefined
+    if (postId || articleId || stockSym) {
+      deepLinkHandled.current = true
+      window.history.replaceState({}, "", "/")
+      if (postId) {
+        setInitialCommunityPostId(Number(postId))
+        setCurrentScreen("community")
+        setActiveTab("community")
+      } else if (articleId) {
+        handleNotificationNavigateToArticle(Number(articleId), tab)
+      } else if (stockSym) {
+        handleNotificationNavigateToStock(stockSym, tab)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authSession])
+
+  // Listen for notification-click messages from the service worker (foreground)
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type !== "notification_click") return
+      const url = new URL(event.data.url, window.location.origin)
+      const params = url.searchParams
+      const postId = params.get("post")
+      const articleId = params.get("article")
+      const stockSym = params.get("stock")
+      const tab = params.get("tab") ?? undefined
+      if (postId) {
+        setInitialCommunityPostId(Number(postId))
+        setCurrentScreen("community")
+        setActiveTab("community")
+      } else if (articleId) {
+        handleNotificationNavigateToArticle(Number(articleId), tab)
+      } else if (stockSym) {
+        handleNotificationNavigateToStock(stockSym, tab)
+      }
+    }
+    navigator.serviceWorker.addEventListener("message", handler)
+    return () => navigator.serviceWorker.removeEventListener("message", handler)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const renderScreen = () => {
     switch (currentScreen) {
       case "home":
@@ -379,7 +435,7 @@ export default function TickFeedApp() {
           />
         ) : null
       case "community":
-        return <CommunityScreen token={token} />
+        return <CommunityScreen token={token} initialPostId={initialCommunityPostId} />
       case "profile":
         return authSession ? (
           <ProfileScreen

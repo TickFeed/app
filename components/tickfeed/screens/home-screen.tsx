@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Search, Bell, TrendingUp, RefreshCw } from "lucide-react"
+import { Search, Bell, TrendingUp, RefreshCw, Layers } from "lucide-react"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { MarketDigest } from "../market-digest"
 import { NewsCard } from "../news-card"
 import { NewsCarousel } from "../news-carousel"
+import { FocusModeCarousel } from "../focus-mode-carousel"
 import type { NewsArticle } from "@/app/page"
 import {
   getNewsFeed,
@@ -30,9 +31,9 @@ interface HomeScreenProps {
 }
 
 const TABS = [
-  { label: "For You", tab: "for_you" as const },
-  { label: "My Stocks", tab: "my_stocks" as const },
-  { label: "All News", tab: "all" as const },
+  { label: "For You",   tab: "for_you"    as const },
+  { label: "My Stocks", tab: "my_stocks"  as const },
+  { label: "Focus",     tab: "all"        as const, focus: true },
 ]
 
 // Module-level cache — survives component unmount/remount on tab switches
@@ -61,13 +62,47 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
 }
 
 export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
-  const [activeTab, setActiveTab] = useState(0)
-  const [news,      setNews]      = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
-  const [digest,    setDigest]    = useState<MarketDigestResponse | null>(_digestCache.data)
-  const [loading,   setLoading]   = useState(!_feedCache[`${_CACHE_VER}:0`])
-  const [error,     setError]     = useState("")
+  const [activeTab,  setActiveTab]  = useState(0)
+  const [focusMode,  setFocusMode]  = useState(false)
+  const [news,       setNews]       = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
+  const [digest,     setDigest]     = useState<MarketDigestResponse | null>(_digestCache.data)
+  const [loading,    setLoading]    = useState(!_feedCache[`${_CACHE_VER}:0`])
+  const [error,      setError]      = useState("")
   const [unreadCount, setUnreadCount] = useState(0)
-  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollRef   = useRef<HTMLDivElement>(null)
+  const swipeStartX = useRef<number | null>(null)
+  const swipeStartY = useRef<number | null>(null)
+
+  const enterFocusMode = () => {
+    setActiveTab(2)
+    setFocusMode(true)
+  }
+
+  const exitFocusMode = () => {
+    setFocusMode(false)
+    setActiveTab(0)
+  }
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    swipeStartX.current = e.touches[0].clientX
+    swipeStartY.current = e.touches[0].clientY
+  }, [])
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (swipeStartX.current === null || swipeStartY.current === null) return
+    const dx = e.changedTouches[0].clientX - swipeStartX.current
+    const dy = e.changedTouches[0].clientY - swipeStartY.current
+    swipeStartX.current = null
+    swipeStartY.current = null
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return
+    setActiveTab((prev) => {
+      const next = prev + (dx < 0 ? 1 : -1)
+      if (next < 0 || next > 2) return prev
+      if (next === 2) { setFocusMode(true); return 2 }
+      setFocusMode(false)
+      return next
+    })
+  }, [])
 
   // Fetch initial unread count + subscribe to SSE for live updates
   useEffect(() => {
@@ -150,7 +185,16 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   const indexDigests   = digest?.index_digests ?? {}
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-background" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      {/* Focus mode full-screen overlay */}
+      {focusMode && (
+        <FocusModeCarousel
+          articles={news}
+          loading={loading && activeTab === 2}
+          onArticleClick={(article) => { exitFocusMode(); onNewsClick?.(article) }}
+          onExit={exitFocusMode}
+        />
+      )}
       {/* Header */}
       <header className="flex items-center justify-between px-4 pb-2 pt-4 bg-background sticky top-0 z-10">
         <h1 className="text-2xl font-bold">
@@ -191,9 +235,11 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
         {TABS.map((t, i) => (
           <button
             key={t.tab}
-            onClick={() => setActiveTab(i)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
-              activeTab === i
+            onClick={() => "focus" in t && t.focus ? enterFocusMode() : setActiveTab(i)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              "focus" in t && t.focus
+                ? "bg-gradient-to-r from-primary to-violet-600 text-white shadow-md shadow-primary/30"
+                : activeTab === i
                 ? "bg-primary text-primary-foreground"
                 : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
@@ -226,11 +272,11 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                 {activeTab === 1 && "Your Stock Updates"}
               </h2>
               <button
-                onClick={() => setActiveTab(2)}
+                onClick={enterFocusMode}
                 className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
               >
-                View all
-                <TrendingUp className="h-3.5 w-3.5" />
+                Focus mode
+                <Layers className="h-3.5 w-3.5" />
               </button>
             </div>
           )}

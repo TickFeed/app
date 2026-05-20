@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { Send, Heart, MessageSquare, Bot, AlertCircle } from "lucide-react"
+import { Send, Heart, MessageSquare, Bot, AlertCircle, ChevronLeft, Zap } from "lucide-react"
 import {
   API_BASE,
   getCommunityPosts,
@@ -9,10 +9,31 @@ import {
   likePost,
   unlikePost,
   dicebearUrl,
+  getUserPublicProfile,
+  followUser,
+  unfollowUser,
   type CommunityPost,
   type UserSearchResult,
+  type PublicUserProfile,
 } from "@/lib/api"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { CommentsSheet, PollDisplay } from "@/components/tickfeed/screens/community-screen"
+
+function calcAlphaScore(posts: number, likes: number, followers: number) {
+  return posts * 15 + likes * 8 + followers * 25
+}
+const ALPHA_TIERS = [
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
+  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
+  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
+  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
+  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted",     border: "border-border"        },
+]
+function alphaTier(score: number) {
+  return ALPHA_TIERS.find((t) => score >= t.min) ?? ALPHA_TIERS[ALPHA_TIERS.length - 1]
+}
 
 interface DiscussTabProps {
   token: string
@@ -38,6 +59,8 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
+  const [profileUser, setProfileUser] = useState<PublicUserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
   const listEndRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -213,6 +236,27 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
     }
   }
 
+  const handleUserClick = useCallback(async (userId: number) => {
+    setProfileLoading(true)
+    try {
+      const p = await getUserPublicProfile(token, userId)
+      setProfileUser(p)
+    } catch {}
+    finally { setProfileLoading(false) }
+  }, [token])
+
+  const handleProfileFollow = async () => {
+    if (!profileUser) return
+    const wasFollowing = profileUser.is_following
+    setProfileUser((p) => p ? { ...p, is_following: !p.is_following, followers_count: p.followers_count + (wasFollowing ? -1 : 1) } : p)
+    try {
+      if (wasFollowing) await unfollowUser(token, profileUser.id)
+      else await followUser(token, profileUser.id)
+    } catch {
+      setProfileUser((p) => p ? { ...p, is_following: wasFollowing, followers_count: p.followers_count + (wasFollowing ? 1 : -1) } : p)
+    }
+  }
+
   const handleLike = async (post: CommunityPost) => {
     setPosts((prev) =>
       prev.map((p) =>
@@ -248,11 +292,17 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
         onClick={() => setSelectedPost(post)}
       >
         <div className="flex gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold bg-primary/15 text-primary overflow-hidden">
-            {post.avatar_style && post.avatar_style !== "initials" && post.username ? (
-              <img src={dicebearUrl(post.avatar_style, post.username)} alt={initials} className="h-full w-full object-cover" />
-            ) : initials}
-          </div>
+          <Avatar
+            className={`h-9 w-9 flex-shrink-0 ${!post.is_bot ? "cursor-pointer" : ""}`}
+            onClick={(e) => { if (post.is_bot) return; e.stopPropagation(); handleUserClick(post.author_id) }}
+          >
+            {post.avatar_style && post.username && (
+              <AvatarImage src={dicebearUrl(post.avatar_style, post.username)} alt={initials} />
+            )}
+            <AvatarFallback className="text-xs font-bold bg-primary/15 text-primary">
+              {post.is_bot ? <Bot className="h-4 w-4" /> : initials}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
               <span className="text-sm font-semibold text-foreground">@{username}</span>
@@ -425,11 +475,88 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
           token={token}
           myUserId={myUserId}
           initialTickrPending={/@tickr\b/i.test(selectedPost.content) && selectedPost.comments_count === 0}
+          onUserClick={handleUserClick}
           onClose={(finalCount) => {
             setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, comments_count: finalCount } : p))
             setSelectedPost(null)
           }}
         />
+      )}
+
+      {/* ── User profile overlay ── */}
+      {(profileUser || profileLoading) && (
+        <div className="fixed inset-0 z-[400] flex flex-col bg-background">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+            <button
+              onClick={() => setProfileUser(null)}
+              className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h2 className="font-bold text-base text-foreground">Profile</h2>
+          </div>
+
+          {profileLoading && !profileUser ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="h-8 w-8 rounded-full border-2 border-border border-t-primary animate-spin" />
+            </div>
+          ) : profileUser ? (() => {
+            const pName = [profileUser.first_name, profileUser.last_name].filter(Boolean).join(" ") || profileUser.username || "User"
+            const pInitials = profileUser.first_name
+              ? (profileUser.first_name[0] + (profileUser.last_name?.[0] ?? "")).toUpperCase()
+              : (profileUser.username ?? "?").slice(0, 2).toUpperCase()
+            const avatarSrc = dicebearUrl(profileUser.avatar_style, profileUser.username ?? "")
+            const score = calcAlphaScore(profileUser.posts_count, profileUser.likes_received, profileUser.followers_count)
+            const tier = alphaTier(score)
+            const isOwnProfile = profileUser.id === myUserId
+            return (
+              <div className="flex-1 overflow-y-auto">
+                <div className="flex flex-col items-center pt-10 pb-6 px-6 text-center">
+                  <Avatar className="h-24 w-24 mb-4">
+                    {avatarSrc && <AvatarImage src={avatarSrc} alt={pInitials} />}
+                    <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">{pInitials}</AvatarFallback>
+                  </Avatar>
+                  <h3 className="text-xl font-black text-foreground">{pName}</h3>
+                  <p className="text-sm text-muted-foreground mt-0.5">@{profileUser.username ?? "user"}</p>
+                  {!isOwnProfile && (
+                    <button
+                      onClick={handleProfileFollow}
+                      className={`mt-4 rounded-full border px-6 py-2 text-sm font-bold transition-colors ${
+                        profileUser.is_following
+                          ? "border-border text-muted-foreground hover:border-destructive hover:text-destructive"
+                          : "border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+                      }`}
+                    >
+                      {profileUser.is_following ? "Following" : "Follow"}
+                    </button>
+                  )}
+                </div>
+                <div className={`mx-4 mb-4 rounded-2xl border p-4 ${tier.bg} ${tier.border}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Zap className={`h-4 w-4 ${tier.color}`} />
+                      <span className={`text-sm font-bold ${tier.color}`}>{tier.label}</span>
+                    </div>
+                    <span className={`text-lg font-black ${tier.color}`}>{score.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">Alpha Score</p>
+                </div>
+                <div className="mx-4 grid grid-cols-3 gap-3 mb-6">
+                  {[
+                    { label: "Posts",     value: profileUser.posts_count },
+                    { label: "Followers", value: profileUser.followers_count },
+                    { label: "Following", value: profileUser.following_count },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-2xl bg-muted/50 border border-border/50 p-3 text-center">
+                      <p className="text-lg font-black text-foreground">{value}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })() : null}
+        </div>
       )}
     </div>
   )

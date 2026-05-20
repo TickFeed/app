@@ -12,6 +12,7 @@ interface AiChatTabProps {
   welcomeMessage?: string
   suggestedQuestions?: Array<{ q: string; icon?: string }>
   chatEndpoint: string        // e.g. /api/news/123/chat or /api/stocks/RELIANCE/chat
+  initialQuestion?: string
 }
 
 interface ChatMessage {
@@ -45,7 +46,7 @@ function ThinkingStatus({ events }: { events?: string[] }) {
   )
 }
 
-export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, suggestedQuestions, chatEndpoint }: AiChatTabProps) {
+export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, suggestedQuestions, chatEndpoint, initialQuestion }: AiChatTabProps) {
   const INIT_MESSAGE: ChatMessage = {
     id: "init",
     role: "assistant",
@@ -130,6 +131,13 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
   }, [chatLoading, chatEndpoint, token])
 
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  // Pre-fill input when a question is passed from the overview tab
+  useEffect(() => {
+    if (!initialQuestion) return
+    setInputValue(initialQuestion)
+    setTimeout(() => inputRef.current?.focus(), 80)
+  }, [initialQuestion])
 
   const handleSend = async () => {
     if (!inputValue.trim() || chatLoading) return

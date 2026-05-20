@@ -150,6 +150,7 @@ export interface CommunityPost {
   news_id: number | null
   reply_to_id: number | null
   is_bot: boolean
+  is_hidden: boolean
   likes_count: number
   comments_count: number
   image_url: string | null
@@ -448,6 +449,10 @@ export async function getCommunityPosts(
   return res.posts ?? []
 }
 
+export async function getPostById(token: string, postId: number): Promise<CommunityPost> {
+  return apiGet<CommunityPost>(`/api/community/posts/${postId}`, token)
+}
+
 export async function createPost(
   token: string,
   content: string,
@@ -473,6 +478,14 @@ export async function votePoll(
   return apiPost(`/api/community/posts/${postId}/vote`, token, { option_idx: optionIdx })
 }
 
+export async function deletePost(token: string, postId: number): Promise<void> {
+  await apiDelete(`/api/community/posts/${postId}`, token)
+}
+
+export async function reportPost(token: string, postId: number, reason: string): Promise<void> {
+  await apiPost(`/api/community/posts/${postId}/report`, token, { reason })
+}
+
 /** Request a pre-signed SAS URL for direct Azure Blob upload. */
 export async function requestUploadUrl(
   token: string,
@@ -493,6 +506,18 @@ export async function uploadToBlob(sasUrl: string, file: File): Promise<void> {
     body: file,
   })
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
+}
+
+export async function submitSupportTicket(
+  token: string,
+  data: { category: string; subject: string; description: string; imageUrl?: string },
+): Promise<void> {
+  await apiPost('/api/support/ticket', token, {
+    category: data.category,
+    subject: data.subject,
+    description: data.description,
+    image_url: data.imageUrl ?? null,
+  })
 }
 
 export async function getStockChatHistory(token: string, symbol: string): Promise<ChatHistoryMessage[]> {
@@ -571,4 +596,26 @@ export async function markNotificationsRead(token: string, ids: number[]): Promi
 
 export async function markAllNotificationsRead(token: string): Promise<{ unread_count: number }> {
   return apiPost('/api/notifications/read-all', token)
+}
+
+// ── Push notification APIs ────────────────────────────────────────────────────
+
+export async function getVapidPublicKey(): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/notifications/vapid-public-key`)
+  if (!res.ok) throw new Error('VAPID key unavailable')
+  const data = await res.json() as { publicKey: string }
+  return data.publicKey
+}
+
+export async function subscribePush(token: string, sub: { endpoint: string; auth: string; p256dh: string }): Promise<void> {
+  await apiPost('/api/notifications/subscribe', token, sub)
+}
+
+export async function unsubscribePush(token: string, endpoint: string, auth: string, p256dh: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/notifications/unsubscribe`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint, auth, p256dh }),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }

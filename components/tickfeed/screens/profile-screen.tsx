@@ -1,6 +1,6 @@
 "use client"
 
-import { Settings, ChevronRight, Bell, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X } from "lucide-react"
+import { ChevronRight, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
@@ -14,13 +14,14 @@ import { Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import type { AuthUser, AvatarStyle } from "@/lib/auth"
 import {
-  getUserStats, getWatchlist, getInteractionHistory, getFollowing, getMyProfile, getUserPublicProfile,
+  getUserStats, getInteractionHistory, getFollowing, getMyProfile, getUserPublicProfile,
   followUser, unfollowUser,
   formatRelativeTime, sourceToIcon, symbolToColor, symbolToLogo, dicebearUrl as apiBearUrl,
-  type UserStats, type WatchlistItem, type InteractionHistoryItem,
+  type UserStats, type InteractionHistoryItem,
   type FollowingUser, type PublicUserProfile,
 } from "@/lib/api"
 import type { NewsArticle } from "@/app/page"
+import { HelpSupportScreen } from "./help-support-screen"
 
 // ── Alpha Score ───────────────────────────────────────────────────────────────
 function calcAlphaScore(posts: number, likes: number, followers: number) {
@@ -28,13 +29,13 @@ function calcAlphaScore(posts: number, likes: number, followers: number) {
 }
 
 const ALPHA_TIERS = [
-  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
-  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
-  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
-  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
-  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
-  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
-  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted", border: "border-border"           },
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",        barBg: "bg-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30",  desc: "Elite market authority"      },
+  { min: 1500, label: "Shark",         color: "text-purple-500",       barBg: "bg-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30", desc: "Aggressive market hunter"    },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",         barBg: "bg-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30",   desc: "Sharp analytical thinker"    },
+  { min: 300,  label: "Bull",          color: "text-emerald-500",      barBg: "bg-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30",desc: "Consistently bullish voice"   },
+  { min: 100,  label: "Analyst",       color: "text-primary",          barBg: "bg-primary",     bg: "bg-primary/10",     border: "border-primary/30",    desc: "Building market credibility"  },
+  { min: 1,    label: "Observer",      color: "text-foreground",       barBg: "bg-foreground",  bg: "bg-muted",          border: "border-border",        desc: "Starting the journey"         },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", barBg: "bg-muted-foreground", bg: "bg-muted",     border: "border-border",        desc: "Just getting started"         },
 ]
 
 function alphaTier(score: number) {
@@ -72,10 +73,8 @@ const editSchema = z.object({
 type EditFormValues = z.infer<typeof editSchema>
 
 const MENU_ITEMS = [
-  { icon: Bell,        label: "Notifications",       description: "Manage your alert preferences", hasArrow: true },
   { icon: Clock,       label: "Interaction History",  description: "Articles and stocks you've explored", hasArrow: true, action: "history" as const },
-  { icon: Settings,    label: "Settings",             description: "App preferences",              hasArrow: true },
-  { icon: HelpCircle,  label: "Help & Support",       description: "FAQs and contact us",          hasArrow: true },
+  { icon: HelpCircle,  label: "Help & Support",       description: "Raise an issue or send feedback",    hasArrow: true, action: "support" as const },
 ]
 
 
@@ -96,6 +95,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
       : user.theme === "dark"
   )
   const [editOpen, setEditOpen] = useState(false)
+  const [showSupport, setShowSupport] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyTab, setHistoryTab] = useState<"articles" | "stocks">("articles")
   const [history, setHistory] = useState<InteractionHistoryItem[] | null>(null)
@@ -103,17 +103,16 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
   const [saving, setSaving] = useState(false)
   const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(user.avatarStyle ?? "initials")
   const [stats, setStats] = useState<UserStats | null>(null)
-  const [watchlist, setWatchlist] = useState<WatchlistItem[] | null>(null)
   const [following, setFollowing] = useState<FollowingUser[] | null>(null)
   const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null)
   const [selectedUser, setSelectedUser] = useState<PublicUserProfile | null>(null)
   const [userProfileLoading, setUserProfileLoading] = useState(false)
+  const [showRankings, setShowRankings] = useState(false)
 
   useEffect(() => {
     if (!token) return
     getUserStats(token).then(setStats).catch(() => {})
-    getWatchlist(token).then(setWatchlist).catch(() => setWatchlist([]))
-    getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
+getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
     getMyProfile(token).then(setMyProfile).catch(() => {})
   }, [token])
 
@@ -252,7 +251,10 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
 
       <div className="flex-1 overflow-y-auto pb-4">
         {/* Profile card */}
-        <div className="mx-4 mt-2 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 to-primary/5 p-4">
+        <button
+          onClick={() => setEditOpen(true)}
+          className="mx-4 mt-2 block w-[calc(100%-2rem)] rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 to-primary/5 p-4 text-left transition-colors active:bg-primary/10"
+        >
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 flex-shrink-0 border-2 border-primary/30">
               {avatarStyle !== "initials" && user.username && (
@@ -268,50 +270,26 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
                 <span className="text-xs text-muted-foreground">{user.email}</span>
               </div>
             </div>
-            <button
-              onClick={() => setEditOpen(true)}
-              className="flex-shrink-0 rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
+            <span className="flex-shrink-0 rounded-full p-2 text-muted-foreground">
               <ChevronRight className="h-5 w-5" />
-            </button>
+            </span>
           </div>
-        </div>
+        </button>
 
-        {/* Watchlist preview */}
-        <div className="mx-4 mt-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold text-foreground">Your Watchlist</h3>
-            <button onClick={onGoToWatchlist} className="text-sm font-medium text-primary hover:underline">View all</button>
+        {/* Stats */}
+        <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-border bg-card p-3 text-center">
+            <div className="text-2xl font-bold text-foreground">
+              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.articles_interacted}
+            </div>
+            <div className="text-xs text-muted-foreground">Articles Interacted</div>
           </div>
-          {watchlist === null ? (
-            <div className="grid grid-cols-2 gap-2">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-11 animate-pulse rounded-lg border border-border bg-muted" />
-              ))}
+          <div className="rounded-lg border border-border bg-card p-3 text-center">
+            <div className="text-2xl font-bold text-foreground">
+              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.stocks_interacted}
             </div>
-          ) : watchlist.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border bg-card p-4 text-center">
-              <p className="text-sm text-muted-foreground">No stocks added yet.</p>
-              <button
-                onClick={onGoToWatchlist}
-                className="mt-2 text-sm font-medium text-primary hover:underline"
-              >
-                + Add stocks to your watchlist
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              {watchlist.slice(0, 4).map((stock) => (
-                <div
-                  key={stock.symbol}
-                  className="cursor-pointer rounded-lg border border-border bg-card p-3 transition-colors hover:bg-muted/30"
-                >
-                  <p className="text-sm font-medium text-foreground">{stock.symbol}</p>
-                  <p className="text-xs text-muted-foreground truncate">{stock.name ?? stock.symbol}</p>
-                </div>
-              ))}
-            </div>
-          )}
+            <div className="text-xs text-muted-foreground">Stocks Interacted</div>
+          </div>
         </div>
 
         {/* Alpha Score card */}
@@ -322,7 +300,10 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           const prevMin = tier ? tier.min : 0
           const progress = next && score != null ? Math.min(((score - prevMin) / (next.min - prevMin)) * 100, 100) : 100
           return (
-            <div className={`mx-4 mt-4 rounded-xl border p-4 ${tier ? tier.border : "border-border"} ${tier ? tier.bg : "bg-muted"}`}>
+            <button
+              onClick={() => setShowRankings(true)}
+              className={`mx-4 mt-4 w-[calc(100%-2rem)] rounded-xl border p-4 text-left transition-colors active:opacity-80 ${tier ? tier.border : "border-border"} ${tier ? tier.bg : "bg-muted"}`}
+            >
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <Zap className={`h-4 w-4 ${tier ? tier.color : "text-muted-foreground"}`} />
@@ -330,7 +311,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
                 </div>
                 {tier && (
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${tier.border} ${tier.bg} ${tier.color}`}>
-                    {tier.label}
+                    {tier.label} ›
                   </span>
                 )}
               </div>
@@ -340,7 +321,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
               {next && score != null && (
                 <>
                   <div className="h-1.5 w-full rounded-full bg-background/60 overflow-hidden mb-1">
-                    <div className={`h-full rounded-full transition-all ${tier?.color.replace("text-", "bg-")}`} style={{ width: `${progress}%` }} />
+                    <div className={`h-full rounded-full transition-all ${tier?.barBg ?? "bg-primary"}`} style={{ width: `${progress}%` }} />
                   </div>
                   <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
                 </>
@@ -359,25 +340,9 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
                   ))}
                 </div>
               )}
-            </div>
+            </button>
           )
         })()}
-
-        {/* Stats */}
-        <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-border bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
-              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.articles_interacted}
-            </div>
-            <div className="text-xs text-muted-foreground">Articles Interacted</div>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3 text-center">
-            <div className="text-2xl font-bold text-foreground">
-              {stats == null ? <span className="inline-block h-6 w-8 animate-pulse rounded bg-muted" /> : stats.stocks_interacted}
-            </div>
-            <div className="text-xs text-muted-foreground">Stocks Interacted</div>
-          </div>
-        </div>
 
         {/* Following list */}
         <div className="mx-4 mt-4">
@@ -461,7 +426,11 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
         <div className="mx-4 mt-4 space-y-1">
           {MENU_ITEMS.map((item) => {
             const Icon = item.icon
-            const onClick = "action" in item && item.action === "history" ? handleOpenHistory : undefined
+            const onClick = "action" in item
+              ? item.action === "history" ? handleOpenHistory
+              : item.action === "support" ? () => setShowSupport(true)
+              : undefined
+              : undefined
             return (
               <button
                 key={item.label}
@@ -565,7 +534,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
                   {next && (
                     <>
                       <div className="h-1.5 w-full rounded-full bg-background/60 overflow-hidden mb-1">
-                        <div className={`h-full rounded-full transition-all ${tier.color.replace("text-", "bg-")}`} style={{ width: `${progress}%` }} />
+                        <div className={`h-full rounded-full transition-all ${tier.barBg}`} style={{ width: `${progress}%` }} />
                       </div>
                       <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
                     </>
@@ -600,6 +569,114 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           })()}
         </div>
       )}
+
+      {/* Rankings sheet */}
+      {showRankings && (() => {
+        const score = myProfile ? calcAlphaScore(myProfile.posts_count, myProfile.likes_received, myProfile.followers_count) : null
+        const currentTier = score != null ? alphaTier(score) : null
+        const nextTier = score != null ? alphaNextTier(score) : null
+        return (
+          <Sheet open onOpenChange={() => setShowRankings(false)}>
+            <SheetContent side="bottom" className="rounded-t-2xl px-0 pb-0 pt-5 h-[85dvh] flex flex-col">
+              <SheetHeader className="mb-1 px-5 text-left">
+                <SheetTitle className="flex items-center gap-2 text-lg">
+                  <Zap className="h-5 w-5 text-primary" />
+                  Alpha Rankings
+                </SheetTitle>
+                <p className="text-xs text-muted-foreground">Earn points by posting, getting likes and gaining followers</p>
+              </SheetHeader>
+
+              {/* Current score banner */}
+              {score != null && currentTier && (
+                <div className={`mx-5 mb-4 rounded-xl border p-3 ${currentTier.border} ${currentTier.bg}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-0.5">Your score</p>
+                      <p className={`text-2xl font-black ${currentTier.color}`}>{score.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-bold px-3 py-1 rounded-full border ${currentTier.border} ${currentTier.bg} ${currentTier.color}`}>
+                        {currentTier.label}
+                      </span>
+                      {nextTier && (
+                        <p className="text-[10px] text-muted-foreground mt-1">{nextTier.min - score} pts to {nextTier.label}</p>
+                      )}
+                    </div>
+                  </div>
+                  {nextTier && (
+                    <div className="mt-2 h-1.5 w-full rounded-full bg-background/60 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${currentTier.barBg}`}
+                        style={{ width: `${Math.min(((score - currentTier.min) / (nextTier.min - currentTier.min)) * 100, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tier ladder */}
+              <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-2">
+                {[...ALPHA_TIERS].reverse().map((t, i) => {
+                  const isCurrent = currentTier?.label === t.label
+                  const isUnlocked = score != null && score >= t.min
+                  const tierIdx = ALPHA_TIERS.indexOf(t)
+                  const prevT = ALPHA_TIERS[tierIdx + 1] // tier below
+                  return (
+                    <div
+                      key={t.label}
+                      className={`relative rounded-xl border p-3.5 transition-all ${
+                        isCurrent
+                          ? `${t.border} ${t.bg} ring-2 ring-offset-1 ring-offset-background ${t.border.replace("border-", "ring-")}`
+                          : isUnlocked
+                          ? `${t.border} ${t.bg} opacity-80`
+                          : "border-border bg-muted/30 opacity-40"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${t.border} ${t.bg}`}>
+                          <Zap className={`h-4 w-4 ${isUnlocked ? t.color : "text-muted-foreground"}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-sm font-bold ${isUnlocked ? t.color : "text-muted-foreground"}`}>{t.label}</span>
+                            {isCurrent && (
+                              <span className="text-[10px] font-bold bg-primary text-primary-foreground px-1.5 py-0.5 rounded-full">YOU</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">{t.desc}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-xs font-semibold ${isUnlocked ? t.color : "text-muted-foreground"}`}>
+                            {t.min === 0 ? "0+" : `${t.min.toLocaleString()}+`}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">pts</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+
+                {/* How to earn points */}
+                <div className="mt-4 rounded-xl border border-border bg-muted/30 p-4">
+                  <p className="text-xs font-semibold text-foreground mb-2">How to earn points</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { action: "Write a post",    pts: "+15 pts" },
+                      { action: "Get a like",       pts: "+8 pts"  },
+                      { action: "Gain a follower",  pts: "+25 pts" },
+                    ].map(({ action, pts }) => (
+                      <div key={action} className="flex items-center justify-between">
+                        <span className="text-[11px] text-muted-foreground">{action}</span>
+                        <span className="text-[11px] font-semibold text-primary">{pts}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        )
+      })()}
 
       {/* Interaction history sheet */}
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -840,6 +917,11 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
           </Form>
         </SheetContent>
       </Sheet>
+
+      {/* Help & Support overlay */}
+      {showSupport && (
+        <HelpSupportScreen token={token} onBack={() => setShowSupport(false)} />
+      )}
     </div>
   )
 }

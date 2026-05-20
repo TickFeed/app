@@ -45,6 +45,7 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
   const [loadingStock, setLoadingStock] = useState(true)
   const [error, setError] = useState("")
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab ?? "overview")
+  const [pendingQuestion, setPendingQuestion] = useState<string | undefined>(undefined)
   const [discussCount, setDiscussCount] = useState<number | null>(null)
 
   useEffect(() => {
@@ -217,7 +218,7 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
               {suggestedQuestions.map((sq, i) => (
                 <button
                   key={sq.q}
-                  onClick={() => setActiveTab("ai-chat")}
+                  onClick={() => { setPendingQuestion(sq.q); setActiveTab("ai-chat") }}
                   className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl bg-card border border-border text-left active:bg-primary/5 active:border-primary/30 active:scale-[0.99] transition-all group"
                 >
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-bold text-primary">
@@ -334,6 +335,7 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
             welcomeMessage={`Hi! Ask me anything about ${symbol} — fundamentals, sector trends, financials, risks, and news impact. I can reference publicly available data from NSE, Screener.in, and company filings, with source attribution. For real-time prices, check NSE or Moneycontrol directly.`}
             suggestedQuestions={suggestedQuestions}
             chatEndpoint={`/api/stocks/${encodeURIComponent(symbol)}/chat`}
+            initialQuestion={pendingQuestion}
           />
         </div>
       )}

@@ -177,7 +177,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
   ]
 
   const handleShare = async () => {
-    const appUrl = `${window.location.origin}/news/${numericId}`
+    const appUrl = `${window.location.origin}/?article=${numericId}`
     const title  = article.headline
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
@@ -547,7 +547,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
             {chatMessages.length > 0 && !chatLoading && (
               <div className="px-4 pb-2">
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
-                  {["What's the risk?", "Give me a trade idea", "Explain simpler", "What next?"].map((q) => (
+                  {["What's the risk?", "Explain simpler", "What next?"].map((q) => (
                     <button
                       key={q}
                       onClick={() => setInputValue(q)}

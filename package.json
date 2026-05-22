@@ -1,5 +1,5 @@
 {
-  "name": "my-project",
+  "name": "tickfeed",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,15 +9,17 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@capacitor-firebase/analytics": "^8.2.0",
     "@capacitor/android": "^8.3.4",
-    "@capacitor/app": "^8.3.4",
-    "@capacitor/browser": "^8.3.4",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/browser": "^8.0.3",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
-    "@capacitor/haptics": "^8.3.4",
-    "@capacitor/keyboard": "^8.3.4",
-    "@capacitor/push-notifications": "^8.3.4",
-    "@capacitor/status-bar": "^8.3.4",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/keyboard": "^8.0.3",
+    "@capacitor/push-notifications": "^8.1.1",
+    "@capacitor/status-bar": "^8.0.2",
+    "firebase": "^12.13.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",

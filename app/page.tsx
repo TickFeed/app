@@ -5,6 +5,7 @@ import { usePushNotifications } from "@/lib/push"
 import { useNativePush } from "@/lib/push-native"
 import { updateStatusBar } from "@/lib/native"
 import { useAndroidBackButton } from "@/lib/back-button"
+import { clearAnalyticsUser, logEvent, logScreenView, setAnalyticsUser } from "@/lib/analytics"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -111,6 +112,7 @@ export default function TickFeedApp() {
   }
 
   const handleNewsClick = (article: NewsArticle) => {
+    logEvent("article_open", { article_id: article.id, source: article.source.name })
     setSelectedArticle(article)
     setArticleInitialTab(undefined)
     setPreArticlePreviousScreen(previousScreen)
@@ -126,6 +128,7 @@ export default function TickFeedApp() {
   }
 
   const handleStockClick = (symbol: string) => {
+    logEvent("stock_view", { symbol })
     setSelectedStock(symbol)
     setStockInitialTab(undefined)
     setPreviousScreen(currentScreen)
@@ -189,6 +192,7 @@ export default function TickFeedApp() {
     setPendingEmail("")
     setRegistrationToken(null)
     resetShell()
+    logEvent("login", { method: session.user.email ? "email" : "google" })
   }
 
   const handleGoogleSuccess = async (idToken: string) => {
@@ -315,6 +319,7 @@ export default function TickFeedApp() {
   }
 
   const handleSignOut = () => {
+    logEvent("logout")
     clearAuthSession()
     setAuthSession(null)
     setAuthStep("method")
@@ -325,6 +330,15 @@ export default function TickFeedApp() {
   }
 
   const token = authSession?.token ?? ""
+
+  // Track screen views
+  useEffect(() => { logScreenView(currentScreen) }, [currentScreen])
+
+  // Set / clear analytics user identity
+  useEffect(() => {
+    if (authSession?.user?.id) setAnalyticsUser(String(authSession.user.id))
+    else clearAnalyticsUser()
+  }, [authSession?.user?.id])
 
   // Web Push (VAPID) — browser / PWA
   usePushNotifications(authSession ? token : null)

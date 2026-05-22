@@ -11,8 +11,6 @@ const config: CapacitorConfig = {
     },
   },
   server: {
-    // Allow cleartext in dev so the app can hit localhost backend
-    cleartext: true,
     androidScheme: 'https',
   },
   plugins: {

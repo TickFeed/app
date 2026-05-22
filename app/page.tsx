@@ -456,6 +456,11 @@ export default function TickFeedApp() {
             onBack={() => setCurrentScreen("home")}
             onNavigateToArticle={handleNotificationNavigateToArticle}
             onNavigateToStock={handleNotificationNavigateToStock}
+            onNavigateToCommunityPost={(postId) => {
+              setInitialCommunityPostId(postId)
+              setCurrentScreen("community")
+              setActiveTab("community")
+            }}
           />
         )
       case "watchlist":

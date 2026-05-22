@@ -15,6 +15,7 @@ interface NotificationsScreenProps {
   onBack: () => void
   onNavigateToArticle: (newsId: number, tab?: string) => void
   onNavigateToStock: (symbol: string, tab?: string) => void
+  onNavigateToCommunityPost: (postId: number) => void
 }
 
 function NotifIcon({ type }: { type: AppNotification["type"] }) {
@@ -37,6 +38,7 @@ export function NotificationsScreen({
   onBack,
   onNavigateToArticle,
   onNavigateToStock,
+  onNavigateToCommunityPost,
 }: NotificationsScreenProps) {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,8 +63,13 @@ export function NotificationsScreen({
     }
 
     // Navigate to target
-    if (n.target_type === "article" && n.target_id) {
-      onNavigateToArticle(parseInt(n.target_id, 10), n.target_tab ?? "ai-summary")
+    if (n.target_type === "community" && n.source_post_id) {
+      // Post/mention in community → open that post's comments
+      onNavigateToCommunityPost(n.source_post_id)
+    } else if (n.target_type === "article" && n.target_id) {
+      // Article mention → land on discussions tab; stock news → ai-summary
+      const tab = n.type === "mention" ? "discussions" : (n.target_tab ?? "ai-summary")
+      onNavigateToArticle(parseInt(n.target_id, 10), tab)
     } else if (n.target_type === "stock" && n.target_id) {
       onNavigateToStock(n.target_id, n.target_tab ?? "overview")
     }

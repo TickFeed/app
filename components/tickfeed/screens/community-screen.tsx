@@ -384,6 +384,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
   const initials = authorInitials(post)
   const name = authorName(post)
   const time = formatRelativeTime(post.created_at)
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
   const avatarSrc = dicebearUrl(post.avatar_style, post.username ?? "")
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -489,12 +490,36 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
 
           {/* Post image */}
           {!compact && post.image_url && (
-            <div className="mt-3 rounded-xl overflow-hidden border border-border/40">
+            <div
+              className="mt-3 rounded-xl overflow-hidden border border-border/40 cursor-pointer"
+              onClick={(e) => { e.stopPropagation(); setLightboxUrl(post.image_url!) }}
+            >
               <img
                 src={post.image_url}
                 alt="Post image"
                 className="w-full max-h-72 object-cover"
                 loading="lazy"
+              />
+            </div>
+          )}
+
+          {/* Full-screen image lightbox */}
+          {lightboxUrl && (
+            <div
+              className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center safe-area-pt"
+              onClick={() => setLightboxUrl(null)}
+            >
+              <button
+                className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white"
+                onClick={() => setLightboxUrl(null)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <img
+                src={lightboxUrl}
+                alt="Full size"
+                className="max-w-full max-h-full object-contain"
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
           )}
@@ -1066,7 +1091,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
 
   return (
     /* Full-screen slide-up over the community feed */
-    <div className="fixed inset-0 z-[200] bg-background flex flex-col">
+    <div className="fixed inset-0 z-[200] bg-background flex flex-col safe-area-pt">
 
       {/* ── Sticky header ── */}
       <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">

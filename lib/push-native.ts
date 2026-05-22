@@ -28,33 +28,37 @@ export function useNativePush(
   useEffect(() => {
     if (!token || registeredRef.current || !isNative()) return
 
+    let PushNotificationsModule: typeof import("@capacitor/push-notifications")["PushNotifications"] | null = null
+
     async function setup() {
       try {
-        const { PushNotifications } = await import("@capacitor/push-notifications")
+        const mod = await import("@capacitor/push-notifications")
+        PushNotificationsModule = mod.PushNotifications
 
-        const permission = await PushNotifications.requestPermissions()
+        const permission = await PushNotificationsModule.requestPermissions()
         if (permission.receive !== "granted") return
 
-        await PushNotifications.register()
+        await PushNotificationsModule.register()
 
-        await PushNotifications.addListener("registration", async ({ value: fcmToken }) => {
-          try {
-            await registerFcmToken(token!, fcmToken)
-            registeredRef.current = true
-          } catch (err) {
-            console.warn("[native-push] FCM token registration failed:", err)
-          }
+        await PushNotificationsModule.addListener("registration", ({ value: fcmToken }) => {
+          registerFcmToken(token!, fcmToken)
+            .then(() => { registeredRef.current = true })
+            .catch((err) => { console.warn("[native-push] FCM token registration failed:", err) })
         })
 
-        await PushNotifications.addListener("registrationError", (err) => {
+        await PushNotificationsModule.addListener("registrationError", (err) => {
           console.warn("[native-push] registration error:", err)
         })
 
         // Foreground notification received — Capacitor shows it automatically
         // No action needed unless you want custom in-app banners
 
-        await PushNotifications.addListener("pushNotificationActionPerformed", ({ notification }) => {
-          onTapRef.current(notification.data as PushNotificationData)
+        await PushNotificationsModule.addListener("pushNotificationActionPerformed", ({ notification }) => {
+          try {
+            onTapRef.current((notification.data ?? {}) as PushNotificationData)
+          } catch (err) {
+            console.warn("[native-push] notification tap handler failed:", err)
+          }
         })
       } catch (err) {
         console.warn("[native-push] setup failed:", err)
@@ -62,5 +66,10 @@ export function useNativePush(
     }
 
     setup()
+
+    return () => {
+      PushNotificationsModule?.removeAllListeners().catch(() => {})
+      registeredRef.current = false
+    }
   }, [token])
 }

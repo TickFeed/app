@@ -16,8 +16,8 @@ const config: CapacitorConfig = {
   plugins: {
     GoogleAuth: {
       scopes: ['profile', 'email'],
-      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-      serverClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '505546758075-0comisfdccekcevt8b59qba5l01ku0qg.apps.googleusercontent.com',
+      serverClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '505546758075-0comisfdccekcevt8b59qba5l01ku0qg.apps.googleusercontent.com',
     },
     Keyboard: {
       // Resize body only so bottom nav stays fixed while content shrinks above keyboard

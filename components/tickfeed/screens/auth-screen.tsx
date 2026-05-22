@@ -90,6 +90,7 @@ export function AuthScreen({
     if (isNative()) {
       try {
         const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth')
+        await GoogleAuth.initialize()
         const user = await GoogleAuth.signIn()
         await onGoogleSuccess(user.authentication.idToken, 'id_token')
       } catch {

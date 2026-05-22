@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Sparkles, Send } from "lucide-react"
 import { API_BASE, getStockChatHistory, getChatHistory, type ChatHistoryMessage } from "@/lib/api"
+import { AiMarkdown } from "./ai-markdown"
 
 interface AiChatTabProps {
   token: string
@@ -190,7 +191,7 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
                       <ThinkingStatus />
                     )
                   ) : (
-                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                    <AiMarkdown content={message.content} streaming={chatLoading && idx === chatMessages.length - 1} />
                   )}
                 </div>
               </div>

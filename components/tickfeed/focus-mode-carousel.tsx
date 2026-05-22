@@ -306,26 +306,22 @@ function FocusCard({
   dragProgress?: number
 }) {
   const [imgError, setImgError] = useState(false)
-  const showImage = article.imageUrl && !imgError
+  const isNse = article.source.name.toLowerCase().includes("nse")
+  const defaultImg = isNse ? "/default-nse.svg" : "/default-news.svg"
+  const imgSrc = (article.imageUrl && !imgError) ? article.imageUrl : defaultImg
 
   return (
     <div className="h-full flex flex-col bg-card border border-border/30">
 
       {/* Image area — 44% of card height */}
       <div className="relative overflow-hidden" style={{ flex: "0 0 44%" }}>
-        {showImage ? (
-          <img
-            src={article.imageUrl}
-            alt={article.headline}
-            className="w-full h-full object-cover"
-            draggable={false}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-primary/15 via-primary/5 to-background flex items-center justify-center">
-            <TrendingUp className="h-16 w-16 text-primary/20" />
-          </div>
-        )}
+        <img
+          src={imgSrc}
+          alt={article.headline}
+          className="w-full h-full object-cover"
+          draggable={false}
+          onError={() => setImgError(true)}
+        />
 
         {/* Bottom gradient so pills are readable */}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />

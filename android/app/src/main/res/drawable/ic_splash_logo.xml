@@ -5,18 +5,18 @@
     android:viewportWidth="192"
     android:viewportHeight="192">
 
-    <!-- Rounded square background in brand indigo -->
+    <!-- Rounded square background dark slate -->
     <path
-        android:fillColor="#6366f1"
+        android:fillColor="#0f172a"
         android:pathData="M36,0 L156,0 A36,36 0 0,1 192,36 L192,156 A36,36 0 0,1 156,192 L36,192 A36,36 0 0,1 0,156 L0,36 A36,36 0 0,1 36,0 Z" />
 
-    <!-- Letter T -->
+    <!-- Letter T in white -->
     <path
         android:fillColor="#ffffff"
         android:pathData="M24,52 H88 V66 H62 V124 H50 V66 H24 Z" />
 
-    <!-- Letter F -->
+    <!-- Letter F in green -->
     <path
-        android:fillColor="#ffffff"
+        android:fillColor="#22c55e"
         android:pathData="M102,52 H174 V66 H116 V84 H160 V98 H116 V124 H102 Z" />
 </vector>

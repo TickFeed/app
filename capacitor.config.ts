@@ -14,6 +14,11 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
   },
   plugins: {
+    GoogleAuth: {
+      scopes: ['profile', 'email'],
+      clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+      serverClientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+    },
     Keyboard: {
       // Resize body only so bottom nav stays fixed while content shrinks above keyboard
       resize: 'body',

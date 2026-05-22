@@ -195,10 +195,10 @@ export default function TickFeedApp() {
     logEvent("login", { method: session.user.email ? "email" : "google" })
   }
 
-  const handleGoogleSuccess = async (idToken: string) => {
+  const handleGoogleSuccess = async (token: string, tokenType: 'access_token' | 'id_token') => {
     setIsAuthSubmitting(true)
     try {
-      const result = await signInWithGoogle(idToken)
+      const result = await signInWithGoogle(token, tokenType)
       if (result.status === "error") {
         toast({ title: "Google sign-in failed", description: result.message })
         return

@@ -128,13 +128,13 @@ export function clearAuthSession(): void {
   }
 }
 
-export async function signInWithGoogle(accessToken: string): Promise<GoogleSignInResult> {
+export async function signInWithGoogle(token: string, tokenType: 'access_token' | 'id_token' = 'access_token'): Promise<GoogleSignInResult> {
   try {
     const data = await apiPost<{
       token: string
       user: Record<string, unknown>
       is_new_user: boolean
-    }>('/api/auth/google', { access_token: accessToken })
+    }>('/api/auth/google', tokenType === 'id_token' ? { id_token: token } : { access_token: token })
 
     const user = mapUser(data.user)
     return { status: 'authenticated', user, session: { token: data.token, user } }

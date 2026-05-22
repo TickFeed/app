@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useGoogleLogin } from "@react-oauth/google"
+import { isNative } from "@/lib/native"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -40,7 +41,7 @@ interface AuthScreenProps {
   step: Exclude<AuthStep, "authenticated">
   email: string
   isSubmitting: boolean
-  onGoogleSuccess: (idToken: string) => Promise<void>
+  onGoogleSuccess: (token: string, tokenType: 'access_token' | 'id_token') => Promise<void>
   onGoogleError: () => void
   onSubmitEmail: (email: string) => Promise<void>
   onSubmitOtp: (otp: string) => Promise<void>
@@ -81,9 +82,23 @@ export function AuthScreen({
   })
 
   const googleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => void onGoogleSuccess(tokenResponse.access_token),
+    onSuccess: (tokenResponse) => void onGoogleSuccess(tokenResponse.access_token, 'access_token'),
     onError: onGoogleError,
   })
+
+  async function handleGooglePress() {
+    if (isNative()) {
+      try {
+        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth')
+        const user = await GoogleAuth.signIn()
+        await onGoogleSuccess(user.authentication.idToken, 'id_token')
+      } catch {
+        onGoogleError()
+      }
+    } else {
+      googleLogin()
+    }
+  }
 
   const heading = (() => {
     if (step === "email") return { title: "Sign in with email", description: "We'll send a one-time code — no password needed." }
@@ -158,7 +173,7 @@ export function AuthScreen({
                   {/* Google button */}
                   <button
                     type="button"
-                    onClick={() => googleLogin()}
+                    onClick={() => void handleGooglePress()}
                     disabled={isSubmitting}
                     className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-border/60 bg-white px-4 shadow-sm transition-all hover:shadow-md active:scale-[0.98] disabled:opacity-60"
                   >

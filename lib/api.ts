@@ -26,6 +26,7 @@ async function apiPost<T>(path: string, token: string, body?: unknown): Promise<
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail || `HTTP ${res.status}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 

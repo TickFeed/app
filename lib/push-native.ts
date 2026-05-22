@@ -38,8 +38,8 @@ export function useNativePush(
         const permission = await PushNotificationsModule.requestPermissions()
         if (permission.receive !== "granted") return
 
-        await PushNotificationsModule.register()
-
+        // Listeners must be registered BEFORE register() — the registration event
+        // fires synchronously and would be missed if listeners are added after.
         await PushNotificationsModule.addListener("registration", ({ value: fcmToken }) => {
           registerFcmToken(token!, fcmToken)
             .then(() => { registeredRef.current = true })
@@ -50,8 +50,15 @@ export function useNativePush(
           console.warn("[native-push] registration error:", err)
         })
 
-        // Foreground notification received — Capacitor shows it automatically
-        // No action needed unless you want custom in-app banners
+        await PushNotificationsModule.addListener("pushNotificationReceived", ({ notification }) => {
+          // Android suppresses FCM notifications when the app is in the foreground.
+          // Re-route the payload to the tap handler so the user sees it as an in-app action.
+          try {
+            onTapRef.current((notification.data ?? {}) as PushNotificationData)
+          } catch (err) {
+            console.warn("[native-push] foreground notification handler failed:", err)
+          }
+        })
 
         await PushNotificationsModule.addListener("pushNotificationActionPerformed", ({ notification }) => {
           try {
@@ -60,6 +67,8 @@ export function useNativePush(
             console.warn("[native-push] notification tap handler failed:", err)
           }
         })
+
+        await PushNotificationsModule.register()
       } catch (err) {
         console.warn("[native-push] setup failed:", err)
       }

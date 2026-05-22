@@ -46,6 +46,7 @@ jobs:
           CAPACITOR_BUILD: "1"
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://tickfeedapi.kanishakmittal.site' }}
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}
         run: npx next build
 
       - name: Sync Capacitor

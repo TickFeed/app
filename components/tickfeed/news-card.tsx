@@ -83,15 +83,12 @@ export function NewsCard({
 
         {/* Thumbnail — always shown with fallback */}
         <div className="relative h-16 w-16 flex-shrink-0 self-center overflow-hidden rounded-lg bg-muted">
-          {imageUrl ? (
-            <Image src={imageUrl} alt="" fill className="object-cover" />
-          ) : (
-            <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60">
-              <span className="text-sm font-bold text-muted-foreground/70">
-                {(source.icon || source.name).slice(0, 2).toUpperCase()}
-              </span>
-            </div>
-          )}
+          <Image
+            src={imageUrl || (source.name.toLowerCase().includes("nse") ? "/default-nse.svg" : "/default-news.svg")}
+            alt=""
+            fill
+            className="object-cover"
+          />
         </div>
       </div>
     </article>

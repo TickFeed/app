@@ -120,7 +120,7 @@ export function AuthScreen({
   ]
 
   return (
-    <div className="relative flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
+    <div className="safe-area-pt safe-area-pb relative flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
       <style>{`@keyframes ticker{from{transform:translateX(0)}to{transform:translateX(-50%)}}`}</style>
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(34,197,94,0.12),_transparent_38%),radial-gradient(circle_at_bottom,_rgba(59,130,246,0.08),_transparent_32%)]" />
 

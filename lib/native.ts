@@ -10,7 +10,9 @@ export async function updateStatusBar(theme: "light" | "dark"): Promise<void> {
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar")
     await StatusBar.setStyle({ style: theme === "dark" ? Style.Dark : Style.Light })
-    await StatusBar.setBackgroundColor({ color: theme === "dark" ? "#09090b" : "#ffffff" })
+    // Let the WebView paint behind the status bar so the app fills the whole screen.
+    // CSS safe-area-inset-top handles content padding.
+    await StatusBar.setOverlaysWebView({ overlay: true })
   } catch { /* non-fatal */ }
 }
 

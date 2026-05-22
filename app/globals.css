@@ -197,7 +197,10 @@
   animation: sparkline-draw 1.5s ease-out forwards;
 }
 
-/* Safe area support for mobile */
+/* Safe area support for mobile (edge-to-edge with system bars) */
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }

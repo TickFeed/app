@@ -536,7 +536,7 @@ export default function TickFeedApp() {
     currentScreen !== "search"
 
    return (
-    <div className="flex h-[100dvh] flex-col bg-background">
+    <div className="flex h-[100dvh] flex-col bg-background safe-area-pt">
       <div className="flex-1 overflow-hidden">{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
     </div>

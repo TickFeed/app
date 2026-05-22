@@ -32,17 +32,14 @@ const THINKING_PHRASES = [
   "Almost there…",
 ]
 
-function ThinkingStatus({ events }: { events?: string[] }) {
+function ThinkingStatus() {
   const [phraseIdx, setPhraseIdx] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setPhraseIdx((i) => (i + 1) % THINKING_PHRASES.length), 1800)
     return () => clearInterval(t)
   }, [])
-  const lastEvent = events?.length
-    ? (() => { try { return JSON.parse(events[events.length - 1]).content } catch { return events[events.length - 1] } })()
-    : null
   return (
-    <p className="text-sm text-muted-foreground animate-pulse">{lastEvent || THINKING_PHRASES[phraseIdx]}</p>
+    <p className="text-sm text-muted-foreground animate-pulse">{THINKING_PHRASES[phraseIdx]}</p>
   )
 }
 
@@ -175,22 +172,23 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] font-semibold text-primary mb-1.5 uppercase tracking-wide">Tickr AI</p>
-                  {message.events && message.events.length > 0 && (
-                    <div className="flex flex-col gap-1 mb-2">
-                      {message.events.map((ev, i) => {
-                        let content = ev
-                        try { content = JSON.parse(ev).content } catch {}
-                        return (
-                          <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                            <span className="h-1 w-1 rounded-full bg-muted-foreground/50 flex-shrink-0" />
-                            {content}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
                   {!message.content && chatLoading && idx === chatMessages.length - 1 ? (
-                    <ThinkingStatus events={message.events} />
+                    message.events && message.events.length > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        {message.events.map((ev, i) => {
+                          let content = ev
+                          try { content = JSON.parse(ev).content } catch {}
+                          return (
+                            <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <span className="h-1 w-1 rounded-full bg-muted-foreground/50 flex-shrink-0" />
+                              {content}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <ThinkingStatus />
+                    )
                   ) : (
                     <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   )}

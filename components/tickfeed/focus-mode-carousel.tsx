@@ -150,6 +150,7 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
   return (
     <div
       className="fixed inset-0 z-[200] bg-background overflow-hidden"
+      data-no-swipe
       style={{
         opacity:    visible ? 1 : 0,
         transform:  visible ? "scale(1)" : "scale(1.06)",

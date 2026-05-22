@@ -516,22 +516,23 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-semibold text-primary mb-1.5 uppercase tracking-wide">AI Analyst</p>
-                        {message.events && message.events.length > 0 && (
-                          <div className="flex flex-col gap-1 mb-2">
-                            {message.events.map((ev, i) => {
-                              let kind = "tool", content = ev
-                              try { const p = JSON.parse(ev); kind = p.kind; content = p.content } catch {}
-                              return (
-                                <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                                  <span className="h-1 w-1 rounded-full bg-muted-foreground/50 flex-shrink-0" />
-                                  {content}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
                         {!message.content && chatLoading && idx === chatMessages.length - 1 ? (
-                          <ThinkingStatus events={message.events} />
+                          message.events && message.events.length > 0 ? (
+                            <div className="flex flex-col gap-1">
+                              {message.events.map((ev, i) => {
+                                let content = ev
+                                try { content = JSON.parse(ev).content } catch {}
+                                return (
+                                  <div key={i} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                                    <span className="h-1 w-1 rounded-full bg-muted-foreground/50 flex-shrink-0" />
+                                    {content}
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : (
+                            <ThinkingStatus />
+                          )
                         ) : (
                           <AiMarkdown content={message.content} streaming={chatLoading && idx === chatMessages.length - 1} />
                         )}
@@ -603,7 +604,7 @@ const THINKING_PHRASES = [
   "Almost there…",
 ]
 
-function ThinkingStatus({ events }: { events?: string[] }) {
+function ThinkingStatus() {
   const [idx, setIdx] = useState(0)
 
   useEffect(() => {
@@ -611,18 +612,11 @@ function ThinkingStatus({ events }: { events?: string[] }) {
     return () => clearInterval(t)
   }, [])
 
-  const lastEvent = events && events.length > 0
-    ? (() => { try { return JSON.parse(events[events.length - 1]).content } catch { return events[events.length - 1] } })()
-    : null
-
   return (
     <div className="flex items-center gap-2 py-1">
       <span className="h-1.5 w-1.5 rounded-full bg-primary/60 animate-pulse flex-shrink-0" />
-      <span
-        key={lastEvent ?? idx}
-        className="text-xs text-muted-foreground transition-opacity duration-300"
-      >
-        {lastEvent ?? THINKING_PHRASES[idx]}
+      <span key={idx} className="text-xs text-muted-foreground transition-opacity duration-300">
+        {THINKING_PHRASES[idx]}
       </span>
     </div>
   )

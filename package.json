@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
+    "@capacitor/app": "^8.3.4",
     "@capacitor/browser": "^8.3.4",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
     "@capacitor/haptics": "^8.3.4",
+    "@capacitor/keyboard": "^8.3.4",
     "@capacitor/push-notifications": "^8.3.4",
     "@capacitor/status-bar": "^8.3.4",
     "@hookform/resolvers": "^3.9.1",

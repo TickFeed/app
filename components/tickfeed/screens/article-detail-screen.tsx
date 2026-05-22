@@ -577,6 +577,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"
                   }}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSendMessage())}
+                  onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ behavior: "smooth", block: "nearest" }), 300)}
                   placeholder="Ask anything about this news…"
                   disabled={chatLoading}
                   className="flex-1 bg-transparent px-3 py-2 text-sm outline-none resize-none overflow-hidden leading-5 placeholder:text-muted-foreground disabled:opacity-60"

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android"
+    android:opacity="opaque">
+
+    <!-- Dark background matching app dark theme -->
+    <item android:drawable="@color/splash_background" />
+
+    <!-- Centered TF logo -->
+    <item
+        android:width="144dp"
+        android:height="144dp"
+        android:gravity="center"
+        android:drawable="@drawable/ic_splash_logo" />
+
+</layer-list>

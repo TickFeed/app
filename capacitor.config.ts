@@ -15,6 +15,19 @@ const config: CapacitorConfig = {
     cleartext: true,
     androidScheme: 'https',
   },
+  plugins: {
+    Keyboard: {
+      // Resize body only so bottom nav stays fixed while content shrinks above keyboard
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+    SplashScreen: {
+      launchShowDuration: 1500,
+      launchAutoHide: true,
+      backgroundColor: '#09090b',
+      showSpinner: false,
+    },
+  },
 };
 
 export default config;

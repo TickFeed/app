@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import { usePushNotifications } from "@/lib/push"
 import { useNativePush } from "@/lib/push-native"
 import { updateStatusBar } from "@/lib/native"
+import { useAndroidBackButton } from "@/lib/back-button"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -341,6 +342,26 @@ export default function TickFeedApp() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useNativePush(authSession ? token : null, handleNativePushTap)
+
+  // Android hardware/gesture back button
+  const lastBackPressRef = useRef(0)
+  const handleAndroidBack = useCallback((): boolean => {
+    if (currentScreen === "article-detail") { handleBackFromArticle(); return true }
+    if (currentScreen === "stock-detail")   { handleBackFromStock();   return true }
+    if (currentScreen === "add-stock")      { handleBackFromAddStock(); return true }
+    if (currentScreen !== "home") {
+      setCurrentScreen("home")
+      setActiveTab("home")
+      return true
+    }
+    // On home root — double-tap to exit
+    const now = Date.now()
+    if (now - lastBackPressRef.current < 2000) return false
+    lastBackPressRef.current = now
+    toast({ title: "Press back again to exit" })
+    return true
+  }, [currentScreen, handleBackFromArticle, handleBackFromStock, handleBackFromAddStock])
+  useAndroidBackButton(handleAndroidBack)
 
   // Handle notification deep-links: ?post=ID, ?article=ID&tab=TAB, ?stock=SYM&tab=TAB
   const deepLinkHandled = useRef(false)

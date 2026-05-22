@@ -313,8 +313,8 @@ function FocusCard({
   return (
     <div className="h-full flex flex-col bg-card border border-border/30">
 
-      {/* Image area — 44% of card height */}
-      <div className="relative overflow-hidden" style={{ flex: "0 0 44%" }}>
+      {/* Image area — 40% of card height */}
+      <div className="relative overflow-hidden" style={{ flex: "0 0 40%" }}>
         <img
           src={imgSrc}
           alt={article.headline}
@@ -358,36 +358,36 @@ function FocusCard({
       </div>
 
       {/* Text content */}
-      <div className="flex flex-1 flex-col p-4 min-h-0">
-        <p className="text-[11px] text-muted-foreground mb-2">{article.timestamp}</p>
+      <div className="flex flex-1 flex-col px-5 pt-5 pb-5 min-h-0">
+        <p className="text-[13px] text-muted-foreground mb-3">{article.timestamp}</p>
 
-        <h3 className="text-[17px] font-bold leading-snug text-foreground mb-2.5">
+        <h3 className="text-[22px] font-bold leading-snug text-foreground mb-4">
           {article.headline}
         </h3>
 
         <div className="flex-1 min-h-0 overflow-hidden">
           {article.content ? (
-            <p className="text-sm leading-relaxed text-muted-foreground line-clamp-4">
+            <p className="text-[15px] leading-relaxed text-muted-foreground line-clamp-6">
               {article.content}
             </p>
           ) : (
             <div className="flex items-center gap-1.5 text-muted-foreground/50">
-              <Sparkles className="h-3 w-3 shrink-0" />
-              <span className="text-xs">AI summary generating…</span>
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span className="text-sm">AI summary generating…</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/40">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <MessageCircle className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium">
+        <div className="flex items-center justify-between pt-4 mt-4 border-t border-border/40">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <MessageCircle className="h-5 w-5 shrink-0" />
+            <span className="text-[15px] font-medium">
               {article.commentsCount > 0
                 ? `${article.commentsCount} discussion${article.commentsCount !== 1 ? "s" : ""}`
                 : "Be first to discuss"}
             </span>
           </div>
-          <span className="text-xs font-semibold text-primary">Read more →</span>
+          <span className="text-sm font-semibold text-primary">Read more →</span>
         </div>
       </div>
     </div>

@@ -54,6 +54,9 @@ jobs:
       - name: Grant Gradle execute permission
         run: chmod +x android/gradlew
 
+      - name: Decode google-services.json
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+
       # ── Debug build — runs on push to master or manual debug trigger ─────────
       - name: Build debug APK
         if: ${{ github.event_name == 'push' || github.event.inputs.build_type == 'debug' }}
@@ -72,9 +75,6 @@ jobs:
       - name: Decode keystore
         if: ${{ github.event.inputs.build_type == 'release' || startsWith(github.ref, 'refs/tags/') }}
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/tickfeed-release.keystore
-
-      - name: Decode google-services.json
-        run: echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
 
       - name: Write keystore.properties
         if: ${{ github.event.inputs.build_type == 'release' || startsWith(github.ref, 'refs/tags/') }}

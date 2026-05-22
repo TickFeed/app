@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
+import { openBrowser } from "@/lib/native"
 import {
   ChevronLeft,
   Share2,
@@ -403,7 +404,7 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
                       variant="outline"
                       size="sm"
                       className="flex-1 gap-2"
-                      onClick={() => window.open(article.url, "_blank")}
+                      onClick={() => article.url && openBrowser(article.url)}
                     >
                       <ExternalLink className="h-4 w-4" />
                       Read Original

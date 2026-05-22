@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { X, MessageCircle, Sparkles, TrendingUp, RotateCcw } from "lucide-react"
 import type { NewsArticle } from "@/app/page"
+import { triggerHaptic } from "@/lib/native"
 
 // ── Swipe constants (same feel as NewsCarousel) ────────────────────────────
 const SWIPE_THRESHOLD    = 72
@@ -48,6 +49,7 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
   // ── Swipe state machine ────────────────────────────────────────────────
   const advance = useCallback(() => {
     if (!mountedRef.current) return
+    triggerHaptic("light")
     setShowHint(false)
     setIsExiting(true)
     setTimeout(() => {

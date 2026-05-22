@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react"
 import { MessageCircle, Sparkles, TrendingUp, RotateCcw } from "lucide-react"
 import type { NewsArticle } from "@/app/page"
+import { triggerHaptic } from "@/lib/native"
 
 // ── Tuning knobs ───────────────────────────────────────────────────────────
 const SWIPE_THRESHOLD     = 72   // px left needed to commit a swipe
@@ -41,6 +42,7 @@ export function NewsCarousel({ articles, onArticleClick }: NewsCarouselProps) {
   // ── Advance to next card ──────────────────────────────────────────────
   const advance = useCallback(() => {
     if (!mountedRef.current) return
+    triggerHaptic("light")
     setIsExiting(true)
     setTimeout(() => {
       if (!mountedRef.current) return

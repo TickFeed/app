@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { usePushNotifications } from "@/lib/push"
+import { useNativePush } from "@/lib/push-native"
+import { updateStatusBar } from "@/lib/native"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -53,6 +55,7 @@ function applyTheme(theme: 'light' | 'dark') {
     document.documentElement.classList.remove('dark')
   }
   localStorage.setItem('tickfeed-theme', theme)
+  updateStatusBar(theme)
 }
 
 export default function TickFeedApp() {
@@ -322,8 +325,22 @@ export default function TickFeedApp() {
 
   const token = authSession?.token ?? ""
 
-  // Register device for Web Push when authenticated
+  // Web Push (VAPID) — browser / PWA
   usePushNotifications(authSession ? token : null)
+
+  // Native push (FCM) — Capacitor Android
+  const handleNativePushTap = useCallback((data: { target_type?: string; target_id?: string; target_tab?: string }) => {
+    const { target_type, target_id, target_tab } = data
+    if (target_type === "article" && target_id) {
+      handleNotificationNavigateToArticle(Number(target_id), target_tab)
+    } else if (target_type === "stock" && target_id) {
+      handleNotificationNavigateToStock(target_id, target_tab)
+    } else {
+      setActiveTab("home")
+      setCurrentScreen("notifications")
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useNativePush(authSession ? token : null, handleNativePushTap)
 
   // Handle notification deep-links: ?post=ID, ?article=ID&tab=TAB, ?stock=SYM&tab=TAB
   const deepLinkHandled = useRef(false)

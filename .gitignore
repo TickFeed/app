@@ -13,6 +13,11 @@ out/
 # Capacitor native output
 ios/
 
+# Android signing and Firebase config — never commit these
+android/keystore.properties
+android/app/*.keystore
+android/app/google-services.json
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
@@ -29,4 +34,3 @@ yarn-error.log*
 public/manifest.json
 output.json
 package-lock.json
-pnpm-lock.yaml

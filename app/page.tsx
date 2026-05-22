@@ -1,7 +1,11 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { usePushNotifications } from "@/lib/push"
+import { useNativePush } from "@/lib/push-native"
+import { updateStatusBar } from "@/lib/native"
+import { useAndroidBackButton } from "@/lib/back-button"
+import { clearAnalyticsUser, logEvent, logScreenView, setAnalyticsUser } from "@/lib/analytics"
 import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
@@ -53,6 +57,7 @@ function applyTheme(theme: 'light' | 'dark') {
     document.documentElement.classList.remove('dark')
   }
   localStorage.setItem('tickfeed-theme', theme)
+  updateStatusBar(theme)
 }
 
 export default function TickFeedApp() {
@@ -107,6 +112,7 @@ export default function TickFeedApp() {
   }
 
   const handleNewsClick = (article: NewsArticle) => {
+    logEvent("article_open", { article_id: article.id, source: article.source.name })
     setSelectedArticle(article)
     setArticleInitialTab(undefined)
     setPreArticlePreviousScreen(previousScreen)
@@ -122,6 +128,7 @@ export default function TickFeedApp() {
   }
 
   const handleStockClick = (symbol: string) => {
+    logEvent("stock_view", { symbol })
     setSelectedStock(symbol)
     setStockInitialTab(undefined)
     setPreviousScreen(currentScreen)
@@ -185,6 +192,7 @@ export default function TickFeedApp() {
     setPendingEmail("")
     setRegistrationToken(null)
     resetShell()
+    logEvent("login", { method: session.user.email ? "email" : "google" })
   }
 
   const handleGoogleSuccess = async (idToken: string) => {
@@ -311,6 +319,7 @@ export default function TickFeedApp() {
   }
 
   const handleSignOut = () => {
+    logEvent("logout")
     clearAuthSession()
     setAuthSession(null)
     setAuthStep("method")
@@ -322,8 +331,51 @@ export default function TickFeedApp() {
 
   const token = authSession?.token ?? ""
 
-  // Register device for Web Push when authenticated
+  // Track screen views
+  useEffect(() => { logScreenView(currentScreen) }, [currentScreen])
+
+  // Set / clear analytics user identity
+  useEffect(() => {
+    if (authSession?.user?.id) setAnalyticsUser(String(authSession.user.id))
+    else clearAnalyticsUser()
+  }, [authSession?.user?.id])
+
+  // Web Push (VAPID) — browser / PWA
   usePushNotifications(authSession ? token : null)
+
+  // Native push (FCM) — Capacitor Android
+  const handleNativePushTap = useCallback((data: { target_type?: string; target_id?: string; target_tab?: string }) => {
+    const { target_type, target_id, target_tab } = data
+    if (target_type === "article" && target_id) {
+      handleNotificationNavigateToArticle(Number(target_id), target_tab)
+    } else if (target_type === "stock" && target_id) {
+      handleNotificationNavigateToStock(target_id, target_tab)
+    } else {
+      setActiveTab("home")
+      setCurrentScreen("notifications")
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useNativePush(authSession ? token : null, handleNativePushTap)
+
+  // Android hardware/gesture back button
+  const lastBackPressRef = useRef(0)
+  const handleAndroidBack = useCallback((): boolean => {
+    if (currentScreen === "article-detail") { handleBackFromArticle(); return true }
+    if (currentScreen === "stock-detail")   { handleBackFromStock();   return true }
+    if (currentScreen === "add-stock")      { handleBackFromAddStock(); return true }
+    if (currentScreen !== "home") {
+      setCurrentScreen("home")
+      setActiveTab("home")
+      return true
+    }
+    // On home root — double-tap to exit
+    const now = Date.now()
+    if (now - lastBackPressRef.current < 2000) return false
+    lastBackPressRef.current = now
+    toast({ title: "Press back again to exit" })
+    return true
+  }, [currentScreen, handleBackFromArticle, handleBackFromStock, handleBackFromAddStock])
+  useAndroidBackButton(handleAndroidBack)
 
   // Handle notification deep-links: ?post=ID, ?article=ID&tab=TAB, ?stock=SYM&tab=TAB
   const deepLinkHandled = useRef(false)

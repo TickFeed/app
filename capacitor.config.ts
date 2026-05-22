@@ -11,9 +11,20 @@ const config: CapacitorConfig = {
     },
   },
   server: {
-    // Allow cleartext in dev so the app can hit localhost backend
-    cleartext: true,
     androidScheme: 'https',
+  },
+  plugins: {
+    Keyboard: {
+      // Resize body only so bottom nav stays fixed while content shrinks above keyboard
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
+    SplashScreen: {
+      launchShowDuration: 1500,
+      launchAutoHide: true,
+      backgroundColor: '#09090b',
+      showSpinner: false,
+    },
   },
 };
 

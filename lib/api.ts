@@ -619,3 +619,7 @@ export async function unsubscribePush(token: string, endpoint: string, auth: str
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
 }
+
+export async function registerFcmToken(token: string, fcmToken: string): Promise<void> {
+  await apiPost('/api/push/register-fcm', token, { fcm_token: fcmToken })
+}

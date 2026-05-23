@@ -85,7 +85,7 @@ const sections = [
           <li><strong>Google Firebase</strong> — push notification delivery (FCM tokens) and usage analytics</li>
           <li><strong>Microsoft Azure</strong> — cloud storage for support ticket screenshots</li>
           <li><strong>Vercel Analytics</strong> — anonymised page performance metrics</li>
-          <li><strong>Google Vertex AI</strong> — AI-generated news summaries and chat (article content only, no personal data)</li>
+          <li><strong>AI infrastructure provider</strong> — used for news summarisation and chat features (article content only, no personal data)</li>
         </ul>
       </>
     ),

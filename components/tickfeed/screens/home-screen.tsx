@@ -62,20 +62,48 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
 }
 
 export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
-  const [activeTab,  setActiveTab]  = useState(0)
-  const [focusMode,  setFocusMode]  = useState(false)
-  const [news,       setNews]       = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
-  const [digest,     setDigest]     = useState<MarketDigestResponse | null>(_digestCache.data)
-  const [loading,    setLoading]    = useState(!_feedCache[`${_CACHE_VER}:0`])
-  const [error,      setError]      = useState("")
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [activeTab,       setActiveTab]       = useState(0)
+  const [focusMode,       setFocusMode]       = useState(false)
+  const [news,            setNews]            = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
+  const [digest,          setDigest]          = useState<MarketDigestResponse | null>(_digestCache.data)
+  const [loading,         setLoading]         = useState(!_feedCache[`${_CACHE_VER}:0`])
+  const [error,           setError]           = useState("")
+  const [unreadCount,     setUnreadCount]     = useState(0)
+  const [focusArticles,   setFocusArticles]   = useState<NewsArticle[]>([])
+  const [focusPage,       setFocusPage]       = useState(1)
+  const [focusHasMore,    setFocusHasMore]    = useState(true)
+  const [focusLoading,    setFocusLoading]    = useState(false)
+  const [focusLoadingMore, setFocusLoadingMore] = useState(false)
   const scrollRef   = useRef<HTMLDivElement>(null)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
 
+  const fetchFocusPage = useCallback(async (page: number) => {
+    if (page === 1) setFocusLoading(true)
+    else setFocusLoadingMore(true)
+    try {
+      const items  = await getNewsFeed(token, "all", page)
+      const mapped = items.map(feedItemToArticle)
+      setFocusArticles(prev => page === 1 ? mapped : [...prev, ...mapped])
+      setFocusPage(page)
+      setFocusHasMore(mapped.length === 20)
+    } catch {
+      // non-critical
+    } finally {
+      setFocusLoading(false)
+      setFocusLoadingMore(false)
+    }
+  }, [token])
+
+  const loadMoreFocus = useCallback(() => {
+    if (focusLoadingMore || !focusHasMore) return
+    fetchFocusPage(focusPage + 1)
+  }, [focusLoadingMore, focusHasMore, focusPage, fetchFocusPage])
+
   const enterFocusMode = () => {
     setActiveTab(2)
     setFocusMode(true)
+    if (focusArticles.length === 0) fetchFocusPage(1)
   }
 
   const exitFocusMode = () => {
@@ -190,10 +218,13 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
       {/* Focus mode full-screen overlay */}
       {focusMode && (
         <FocusModeCarousel
-          articles={news}
-          loading={loading && activeTab === 2}
+          articles={focusArticles}
+          loading={focusLoading}
+          loadingMore={focusLoadingMore}
+          hasMore={focusHasMore}
           onArticleClick={(article) => { exitFocusMode(); onNewsClick?.(article) }}
           onExit={exitFocusMode}
+          onLoadMore={loadMoreFocus}
         />
       )}
       {/* Header */}

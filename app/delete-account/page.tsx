@@ -49,10 +49,10 @@ export default function DeleteAccountPage() {
                 <p className="mt-0.5 text-gray-600 text-sm leading-relaxed">
                   Send an email to{" "}
                   <a
-                    href="mailto:support@tickfeed.in?subject=Account%20Deletion%20Request"
+                    href="mailto:tickfeednewz@gmail.com?subject=Account%20Deletion%20Request"
                     className="text-green-600 underline underline-offset-2 font-medium"
                   >
-                    support@tickfeed.in
+                    tickfeednewz@gmail.com
                   </a>{" "}
                   with subject <span className="font-medium">Account Deletion Request</span>, including the email address linked to your account.
                 </p>
@@ -96,8 +96,8 @@ export default function DeleteAccountPage() {
         {/* Contact */}
         <p className="text-sm text-gray-500 pb-6">
           Questions? Contact us at{" "}
-          <a href="mailto:support@tickfeed.in" className="text-green-600 underline underline-offset-2">
-            support@tickfeed.in
+          <a href="mailto:tickfeednewz@gmail.com" className="text-green-600 underline underline-offset-2">
+            tickfeednewz@gmail.com
           </a>
           .
         </p>

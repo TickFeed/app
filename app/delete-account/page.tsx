@@ -10,10 +10,7 @@ export default function DeleteAccountPage() {
     <main className="bg-[#f9fafb]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#22c55e" />
-          <path d="M8 20 L14 14 L19 19 L24 12" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <img src="/icon.svg" alt="TickFeed" width={32} height={32} className="rounded-lg" />
         <span className="text-lg font-semibold text-gray-900">TickFeed</span>
       </header>
 

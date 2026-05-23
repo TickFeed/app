@@ -5,20 +5,15 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!--
-        Canvas: 108×108dp. Safe zone: 18–90 (72dp each axis).
-        Letters span y=24–84 (60dp tall), total TF width=50dp centred at x=54.
-        T starts at x=29, F starts at x=56 (4dp gap after T ends at x=52).
+        Geist Bold glyph paths, font-size=100 on 180x180 → scaled ×0.6 to 108x108.
+        text-anchor="middle" x=90 y=125, letter-spacing=-4.
     -->
-    <!-- T: white, compound path (top bar + stem) -->
+    <!-- T glyph: Geist Bold -->
     <path
         android:fillColor="#ffffff"
-        android:pathData="M29,24 L52,24 L52,35 L46,35 L46,84 L35,84 L35,35 L29,35 Z"/>
-    <!-- F: green, stem + top bar -->
+        android:pathData="M41.67,75.00 L32.49,75.00 L32.49,40.08 L19.77,40.08 L19.77,32.40 L54.45,32.40 L54.45,40.08 L41.67,40.08 Z"/>
+    <!-- F glyph: Geist Bold -->
     <path
         android:fillColor="#22c55e"
-        android:pathData="M56,24 L79,24 L79,35 L67,35 L67,84 L56,84 Z"/>
-    <!-- F: middle crossbar -->
-    <path
-        android:fillColor="#22c55e"
-        android:pathData="M56,46 L72,46 L72,56 L56,56 Z"/>
+        android:pathData="M66.21,75.00 L57.09,75.00 L57.09,32.40 L86.49,32.40 L86.49,40.08 L66.21,40.08 L66.21,50.40 L85.41,50.40 L85.41,57.96 L66.21,57.96 Z"/>
 </vector>

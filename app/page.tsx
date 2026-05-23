@@ -174,6 +174,25 @@ export default function TickFeedApp() {
     setCurrentScreen("stock-detail")
   }
 
+  const handleNotificationNavigateToCommunityPost = async (postId: number) => {
+    try {
+      const { getPostById } = await import("@/lib/api")
+      // Walk reply_to_id chain to find the root post (max 10 hops as safety limit)
+      let post = await getPostById(token, postId)
+      let depth = 0
+      while (post.reply_to_id && depth < 10) {
+        post = await getPostById(token, post.reply_to_id)
+        depth++
+      }
+      setInitialCommunityPostId(post.id)
+    } catch {
+      // If fetch fails, try navigating with the original ID anyway
+      setInitialCommunityPostId(postId)
+    }
+    setCurrentScreen("community")
+    setActiveTab("community")
+  }
+
   const handleAddStockScreen = () => {
     setPreviousScreen(currentScreen)
     setCurrentScreen("add-stock")
@@ -456,11 +475,7 @@ export default function TickFeedApp() {
             onBack={() => setCurrentScreen("home")}
             onNavigateToArticle={handleNotificationNavigateToArticle}
             onNavigateToStock={handleNotificationNavigateToStock}
-            onNavigateToCommunityPost={(postId) => {
-              setInitialCommunityPostId(postId)
-              setCurrentScreen("community")
-              setActiveTab("community")
-            }}
+            onNavigateToCommunityPost={handleNotificationNavigateToCommunityPost}
           />
         )
       case "watchlist":

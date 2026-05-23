@@ -3,6 +3,7 @@
 import React, {
   useState, useEffect, useCallback, useRef, useMemo, Fragment,
 } from "react"
+import { createPortal } from "react-dom"
 import {
   Search, TrendingUp, X, Plus, Heart, MessageCircle,
   RefreshCw, Bot, Image as ImageIcon, BarChart2, ChevronLeft, Send, AlertCircle, Share2, Zap,
@@ -503,25 +504,28 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
             </div>
           )}
 
-          {/* Full-screen image lightbox */}
-          {lightboxUrl && (
+          {/* Full-screen image lightbox — portal to body so fixed positioning
+              is always relative to the viewport, not a transformed ancestor */}
+          {lightboxUrl && createPortal(
             <div
-              className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center safe-area-pt"
-              onClick={() => setLightboxUrl(null)}
+              className="fixed inset-0 z-[500] bg-black/95 flex items-center justify-center"
+              onClick={(e) => { e.stopPropagation(); setLightboxUrl(null) }}
             >
               <button
-                className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white"
-                onClick={() => setLightboxUrl(null)}
+                className="absolute right-4 rounded-full bg-white/10 p-2.5 text-white"
+                style={{ top: 'calc(env(safe-area-inset-top, 16px) + 0.5rem)' }}
+                onClick={(e) => { e.stopPropagation(); setLightboxUrl(null) }}
               >
                 <X className="h-5 w-5" />
               </button>
               <img
                 src={lightboxUrl}
                 alt="Full size"
-                className="max-w-full max-h-full object-contain"
+                className="max-w-full max-h-full object-contain p-4"
                 onClick={(e) => e.stopPropagation()}
               />
-            </div>
+            </div>,
+            document.body
           )}
 
           {/* Poll */}

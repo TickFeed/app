@@ -179,7 +179,8 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
   ]
 
   const handleShare = async () => {
-    const appUrl = `${window.location.origin}/?article=${numericId}`
+    const appOrigin = process.env.NEXT_PUBLIC_APP_URL || "https://tickfeed.in"
+    const appUrl = `${appOrigin}/?article=${numericId}`
     const title  = article.headline
     if (typeof navigator !== "undefined" && navigator.share) {
       try {

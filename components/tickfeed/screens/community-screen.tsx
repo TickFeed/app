@@ -390,7 +390,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
   const [menuOpen, setMenuOpen] = useState(false)
 
   const handleShare = async () => {
-    const url = `${window.location.origin}/?post=${post.id}`
+    const url = `${process.env.NEXT_PUBLIC_APP_URL || "https://tickfeed.in"}/?post=${post.id}`
     const canShare = typeof navigator.share === "function"
     if (canShare) {
       try { await navigator.share({ title: "TickFeed Community", url }) } catch { /* cancelled */ }

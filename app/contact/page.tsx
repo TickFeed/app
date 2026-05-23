@@ -39,10 +39,6 @@ export default function ContactPage() {
               Profile → Help &amp; Support (available inside the TickFeed app)
             </p>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-gray-700">Developer</p>
-            <p className="text-sm text-gray-600">Kanishak Mittal, India</p>
-          </div>
         </section>
 
         <p className="text-sm text-gray-500">

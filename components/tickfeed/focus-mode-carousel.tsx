@@ -14,12 +14,15 @@ const VELOCITY_THRESH    = 0.45
 interface FocusModeCarouselProps {
   articles: NewsArticle[]
   loading?: boolean
+  loadingMore?: boolean
+  hasMore?: boolean
   onArticleClick: (article: NewsArticle) => void
   onExit: () => void
+  onLoadMore?: () => void
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
-export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }: FocusModeCarouselProps) {
+export function FocusModeCarousel({ articles, loading, loadingMore, hasMore, onArticleClick, onExit, onLoadMore }: FocusModeCarouselProps) {
   const [visible,      setVisible]      = useState(false) // for entry animation
   const [currentIndex, setCurrentIndex] = useState(0)
   const [dragX,        setDragX]        = useState(0)
@@ -28,12 +31,20 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
   const [enterPhase,   setEnterPhase]   = useState<"init" | "animate" | null>(null)
   const [showHint,     setShowHint]     = useState(true)
 
-  const startXRef     = useRef(0)
-  const startTimeRef  = useRef(0)
-  const rawDeltaXRef  = useRef(0)
-  const isDraggingRef = useRef(false)
-  const hasDraggedRef = useRef(false)
-  const mountedRef    = useRef(true)
+  const startXRef      = useRef(0)
+  const startTimeRef   = useRef(0)
+  const rawDeltaXRef   = useRef(0)
+  const isDraggingRef  = useRef(false)
+  const hasDraggedRef  = useRef(false)
+  const mountedRef     = useRef(true)
+  // Refs so advance() closure never goes stale
+  const hasMoreRef     = useRef(hasMore)
+  const articlesLenRef = useRef(articles.length)
+  const onLoadMoreRef  = useRef(onLoadMore)
+
+  useEffect(() => { hasMoreRef.current    = hasMore },        [hasMore])
+  useEffect(() => { articlesLenRef.current = articles.length }, [articles.length])
+  useEffect(() => { onLoadMoreRef.current  = onLoadMore },     [onLoadMore])
 
   // Entry animation + hint auto-hide
   useEffect(() => {
@@ -44,7 +55,7 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
   }, [])
 
   const total  = articles.length
-  const isDone = currentIndex >= total && !loading
+  const isDone = currentIndex >= total && !loading && !loadingMore && !hasMore
 
   // ── Swipe state machine ────────────────────────────────────────────────
   const advance = useCallback(() => {
@@ -55,7 +66,14 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
     setTimeout(() => {
       if (!mountedRef.current) return
       setIsResetting(true)
-      setCurrentIndex(i => i + 1)
+      setCurrentIndex(i => {
+        const next = i + 1
+        // Trigger next page load when 3 cards from the end
+        if (onLoadMoreRef.current && hasMoreRef.current && next >= articlesLenRef.current - 3) {
+          onLoadMoreRef.current()
+        }
+        return next
+      })
       setDragX(0)
       setIsExiting(false)
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -174,7 +192,7 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
             <TrendingUp className="h-10 w-10 text-primary" />
           </div>
           <h3 className="text-2xl font-black text-foreground mb-2">All Caught Up</h3>
-          <p className="text-base text-muted-foreground mb-8">You've read all {total} stories.</p>
+          <p className="text-base text-muted-foreground mb-8">You've read all {total} stories for today.</p>
           <div className="flex gap-3">
             <button
               onClick={reset}
@@ -270,6 +288,11 @@ export function FocusModeCarousel({ articles, loading, onArticleClick, onExit }:
               </div>
             )}
         </div>
+
+        {/* Loading more indicator */}
+        {loadingMore && (
+          <div className="shrink-0 h-4 w-4 rounded-full border-2 border-border border-t-primary animate-spin" />
+        )}
 
         {/* Exit pill */}
         <button

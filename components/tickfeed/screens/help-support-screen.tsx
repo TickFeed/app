@@ -82,7 +82,7 @@ export function HelpSupportScreen({ token, onBack }: HelpSupportScreenProps) {
   if (submitted) {
     return (
       <div className="fixed inset-0 z-[300] flex flex-col bg-background">
-        <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border">
+        <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
           <button onClick={onBack} className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
@@ -110,7 +110,7 @@ export function HelpSupportScreen({ token, onBack }: HelpSupportScreenProps) {
   return (
     <div className="fixed inset-0 z-[300] flex flex-col bg-background">
       {/* Header */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+      <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background" style={{ paddingTop: 'calc(0.75rem + env(safe-area-inset-top, 0px))' }}>
         <button onClick={onBack} className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors">
           <ChevronLeft className="h-5 w-5" />
         </button>

@@ -337,7 +337,7 @@ export default function TickFeedApp() {
     return result
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     logEvent("logout")
     clearAuthSession()
     setAuthSession(null)
@@ -346,6 +346,12 @@ export default function TickFeedApp() {
     setRegistrationToken(null)
     resetShell()
     toast({ title: "Signed out", description: "You can sign back in anytime." })
+    try {
+      const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth')
+      await GoogleAuth.signOut()
+    } catch {
+      // not native or already signed out — ignore
+    }
   }
 
   const token = authSession?.token ?? ""

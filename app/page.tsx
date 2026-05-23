@@ -107,7 +107,7 @@ export default function TickFeedApp() {
     setActiveTab(tab)
     if (tab === "home") setCurrentScreen("home")
     else if (tab === "watchlist") setCurrentScreen("watchlist")
-    else if (tab === "community") setCurrentScreen("community")
+    else if (tab === "community") { setCurrentScreen("community"); setInitialCommunityPostId(undefined) }
     else if (tab === "profile") setCurrentScreen("profile")
   }
 

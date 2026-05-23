@@ -1385,10 +1385,10 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
   }, [token])
 
   // ── Deep-link: open specific post from shared URL ───────────────────
-  const initialPostHandled = useRef(false)
+  const initialPostHandled = useRef<number | undefined>(undefined)
   useEffect(() => {
-    if (!initialPostId || initialPostHandled.current || !token) return
-    initialPostHandled.current = true
+    if (!initialPostId || initialPostHandled.current === initialPostId || !token) return
+    initialPostHandled.current = initialPostId
     getPostById(token, initialPostId)
       .then((post) => setSelectedPost(post))
       .catch(() => {})

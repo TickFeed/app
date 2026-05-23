@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description: "Privacy Policy for the TickFeed app.",
 }
 
-const LAST_UPDATED = "23 May 2025"
+const LAST_UPDATED = "23 May 2026"
 
 export default function PrivacyPolicyPage() {
   return (

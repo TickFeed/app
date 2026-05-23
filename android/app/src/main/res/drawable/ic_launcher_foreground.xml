@@ -5,15 +5,14 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
     <!--
-        Geist Bold glyph paths, font-size=100 on 180x180 → scaled ×0.6 to 108x108.
-        text-anchor="middle" x=90 y=125, letter-spacing=-4.
+        Geist Bold glyph paths scaled to 70% and centred on 108×108 canvas.
     -->
-    <!-- T glyph: Geist Bold -->
+    <!-- T glyph -->
     <path
         android:fillColor="#ffffff"
-        android:pathData="M41.67,75.00 L32.49,75.00 L32.49,40.08 L19.77,40.08 L19.77,32.40 L54.45,32.40 L54.45,40.08 L41.67,40.08 Z"/>
-    <!-- F glyph: Geist Bold -->
+        android:pathData="M45.37,68.70 L38.95,68.70 L38.95,44.26 L30.05,44.26 L30.05,38.88 L54.32,38.88 L54.32,44.26 L45.37,44.26 Z"/>
+    <!-- F glyph -->
     <path
         android:fillColor="#22c55e"
-        android:pathData="M66.21,75.00 L57.09,75.00 L57.09,32.40 L86.49,32.40 L86.49,40.08 L66.21,40.08 L66.21,50.40 L85.41,50.40 L85.41,57.96 L66.21,57.96 Z"/>
+        android:pathData="M62.55,68.70 L56.16,68.70 L56.16,38.88 L76.74,38.88 L76.74,44.26 L62.55,44.26 L62.55,51.48 L75.99,51.48 L75.99,56.77 L62.55,56.77 Z"/>
 </vector>

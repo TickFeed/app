@@ -9,7 +9,7 @@ const LAST_UPDATED = "23 May 2026"
 
 export default function PrivacyPolicyPage() {
   return (
-    <main className="bg-[#f9fafb]">
+    <main className="h-screen overflow-y-auto bg-[#f9fafb]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
         <span className="text-2xl font-bold">

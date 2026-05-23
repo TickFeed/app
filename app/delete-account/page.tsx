@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function DeleteAccountPage() {
   return (
-    <main className="bg-[#f9fafb]">
+    <main className="h-screen overflow-y-auto bg-[#f9fafb]">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-3 sticky top-0 z-10">
         <span className="text-2xl font-bold"><span className="text-gray-900">Tick</span><span className="text-green-500">Feed</span></span>

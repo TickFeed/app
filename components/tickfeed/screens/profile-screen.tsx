@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X } from "lucide-react"
+import { ChevronRight, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X, Heart, MessageCircle, MessageSquare } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
@@ -15,10 +15,10 @@ import { toast } from "@/hooks/use-toast"
 import type { AuthUser, AvatarStyle } from "@/lib/auth"
 import {
   getUserStats, getInteractionHistory, getFollowing, getMyProfile, getUserPublicProfile,
-  followUser, unfollowUser,
+  followUser, unfollowUser, getUserPosts,
   formatRelativeTime, sourceToIcon, symbolToColor, symbolToLogo, dicebearUrl as apiBearUrl,
   type UserStats, type InteractionHistoryItem,
-  type FollowingUser, type PublicUserProfile,
+  type FollowingUser, type PublicUserProfile, type CommunityPost,
 } from "@/lib/api"
 import type { NewsArticle } from "@/app/page"
 import { HelpSupportScreen } from "./help-support-screen"
@@ -86,9 +86,11 @@ interface ProfileScreenProps {
   onArticleClick: (article: NewsArticle) => void
   onStockClick: (symbol: string) => void
   onUpdateUser: (fields: { firstName?: string; lastName?: string; username?: string; theme?: 'light' | 'dark'; avatarStyle?: AvatarStyle }) => Promise<{ user: AuthUser } | { error: string; field?: "username" }>
+  initialUserId?: number
+  initialUser?: PublicUserProfile | null
 }
 
-export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArticleClick, onStockClick, onUpdateUser }: ProfileScreenProps) {
+export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArticleClick, onStockClick, onUpdateUser, initialUserId, initialUser }: ProfileScreenProps) {
   const [isDarkMode, setIsDarkMode] = useState(() =>
     typeof document !== "undefined"
       ? document.documentElement.classList.contains("dark")
@@ -105,9 +107,11 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
   const [stats, setStats] = useState<UserStats | null>(null)
   const [following, setFollowing] = useState<FollowingUser[] | null>(null)
   const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null)
-  const [selectedUser, setSelectedUser] = useState<PublicUserProfile | null>(null)
-  const [userProfileLoading, setUserProfileLoading] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<PublicUserProfile | null>(initialUser ?? null)
+  const [userProfileLoading, setUserProfileLoading] = useState(!!initialUserId && !initialUser)
   const [showRankings, setShowRankings] = useState(false)
+  const [userPosts, setUserPosts] = useState<CommunityPost[]>([])
+  const [userPostsLoading, setUserPostsLoading] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -137,6 +141,22 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
       setSelectedUser((p) => p ? { ...p, is_following: wasFollowing, followers_count: profile.followers_count } : p)
     }
   }, [token])
+
+  useEffect(() => {
+    if (!selectedUser) { setUserPosts([]); return }
+    setUserPostsLoading(true)
+    getUserPosts(token, selectedUser.id)
+      .then(setUserPosts)
+      .catch(() => setUserPosts([]))
+      .finally(() => setUserPostsLoading(false))
+  }, [selectedUser?.id, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (initialUser) {
+      setSelectedUser(initialUser)
+      setUserProfileLoading(false)
+    }
+  }, [initialUser])
 
   const handleOpenHistory = async () => {
     setHistoryOpen(true)
@@ -539,18 +559,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                       <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
                     </>
                   )}
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    {[
-                      { label: "Posts", value: u.posts_count, pts: "×15" },
-                      { label: "Likes", value: u.likes_received, pts: "×8" },
-                      { label: "Followers", value: u.followers_count, pts: "×25" },
-                    ].map(({ label, value, pts }) => (
-                      <div key={label} className="rounded-lg bg-background/50 px-2 py-1.5">
-                        <p className="text-sm font-bold text-foreground">{value}</p>
-                        <p className="text-[10px] text-muted-foreground">{label} <span className="opacity-60">{pts}</span></p>
-                      </div>
-                    ))}
-                  </div>
+
                 </div>
 
                 {/* Social stats */}
@@ -563,6 +572,55 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                     <p className="text-2xl font-bold text-foreground">{u.following_count}</p>
                     <p className="text-xs text-muted-foreground">Following</p>
                   </div>
+                </div>
+
+                {/* Posts */}
+                <div className="mt-5">
+                  <p className="px-4 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Posts
+                  </p>
+                  {userPostsLoading ? (
+                    [1, 2, 3].map((i) => (
+                      <div key={i} className="px-4 py-4 border-b border-border/50 animate-pulse">
+                        <div className="flex gap-2 mb-2">
+                          <div className="h-3 w-16 rounded bg-muted" />
+                          <div className="h-3 w-12 rounded bg-muted" />
+                        </div>
+                        <div className="h-4 w-full rounded bg-muted mb-1" />
+                        <div className="h-4 w-3/4 rounded bg-muted" />
+                      </div>
+                    ))
+                  ) : userPosts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <MessageSquare className="mb-3 h-8 w-8 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">No posts yet</p>
+                    </div>
+                  ) : (
+                    userPosts.map((post) => (
+                      <div key={post.id} className="border-b border-border/50 px-4 py-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          {post.symbol && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              {post.symbol}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">{formatRelativeTime(post.created_at)}</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                        {post.image_url && (
+                          <img src={post.image_url} alt="" className="mt-2 rounded-lg w-full object-cover max-h-52" />
+                        )}
+                        <div className="flex gap-4 mt-2.5">
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Heart className="h-3.5 w-3.5" />{post.likes_count}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MessageCircle className="h-3.5 w-3.5" />{post.comments_count}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )
@@ -626,7 +684,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                       key={t.label}
                       className={`relative rounded-xl border p-3.5 transition-all ${
                         isCurrent
-                          ? `${t.border} ${t.bg} ring-2 ring-offset-1 ring-offset-background ${t.border.replace("border-", "ring-")}`
+                          ? `${t.border} ${t.bg} ring-2 ring-inset ${t.border.replace("border-", "ring-")}`
                           : isUnlocked
                           ? `${t.border} ${t.bg} opacity-80`
                           : "border-border bg-muted/30 opacity-40"

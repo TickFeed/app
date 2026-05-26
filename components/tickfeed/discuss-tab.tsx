@@ -17,7 +17,7 @@ import {
   type PublicUserProfile,
 } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CommentsSheet, PollDisplay } from "@/components/tickfeed/screens/community-screen"
+import { PollDisplay } from "@/components/tickfeed/screens/community-screen"
 
 function calcAlphaScore(posts: number, likes: number, followers: number) {
   return posts * 15 + likes * 8 + followers * 25
@@ -58,7 +58,6 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
   const myUserId = getMyUserId(token)
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [profileUser, setProfileUser] = useState<PublicUserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
   const listEndRef = useRef<HTMLDivElement>(null)
@@ -137,7 +136,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
         const suggestions: UserSearchResult[] = []
         // Always offer tickr bot if it matches the query
         if (!query || "tickr".startsWith(query)) {
-          suggestions.push({ username: "tickr", first_name: "Tickr", last_name: "AI", is_bot: true })
+          suggestions.push({ id: 0, username: "tickr", first_name: "Tickr", last_name: "AI", is_bot: true, avatar_style: null, followers_count: 0, posts_count: 0 })
           seen.add("tickr")
         }
         // Add unique authors from the current thread (exclude self)
@@ -147,7 +146,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
           if (myUserId !== null && p.author_id === myUserId) continue
           if (!query || uname.toLowerCase().startsWith(query)) {
             seen.add(uname.toLowerCase())
-            suggestions.push({ username: uname, first_name: p.first_name ?? "", last_name: p.last_name ?? "", is_bot: false })
+            suggestions.push({ id: p.author_id, username: uname, first_name: p.first_name ?? "", last_name: p.last_name ?? "", is_bot: false, avatar_style: p.avatar_style, followers_count: 0, posts_count: 0 })
           }
         }
         setMentionResults(suggestions)
@@ -288,8 +287,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
 
     return (
       <div
-        className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm cursor-pointer active:bg-muted/30 transition-colors"
-        onClick={() => setSelectedPost(post)}
+        className="mx-3 rounded-2xl border border-border/60 bg-card px-4 py-3.5 shadow-sm"
       >
         <div className="flex gap-3">
           <Avatar
@@ -323,7 +321,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
             )}
             <button
               onClick={(e) => { e.stopPropagation(); handleLike(post) }}
-              className={`mt-3 flex items-center gap-1.5 text-xs transition-colors ${post.liked_by_me ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+              className={`mt-3 flex items-center gap-1.5 text-xs transition-colors ${post.liked_by_me ? "text-rose-500" : "text-muted-foreground hover:text-rose-500"}`}
             >
               <Heart className={`h-3.5 w-3.5 ${post.liked_by_me ? "fill-current" : ""}`} />
               {post.likes_count > 0 && <span>{post.likes_count}</span>}
@@ -384,9 +382,6 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
           </div>
         ) : (
           <>
-            <p className="px-4 pb-2 text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-              {topLevel.length} {topLevel.length === 1 ? "post" : "posts"}
-            </p>
             <div className="space-y-3">
               {topLevel.map((post) => (
                 <div key={post.id} className="space-y-1.5">
@@ -468,20 +463,6 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
           </div>
         </div>
       </div>
-
-      {selectedPost && (
-        <CommentsSheet
-          post={selectedPost}
-          token={token}
-          myUserId={myUserId}
-          initialTickrPending={/@tickr\b/i.test(selectedPost.content) && selectedPost.comments_count === 0}
-          onUserClick={handleUserClick}
-          onClose={(finalCount) => {
-            setPosts((prev) => prev.map((p) => p.id === selectedPost.id ? { ...p, comments_count: finalCount } : p))
-            setSelectedPost(null)
-          }}
-        />
-      )}
 
       {/* ── User profile overlay ── */}
       {(profileUser || profileLoading) && (

@@ -15,6 +15,7 @@ interface NewsCardProps {
   aiSummaryAvailable: boolean
   commentsCount?: number
   imageUrl?: string
+  affectedSymbol?: string
   onClick?: () => void
 }
 
@@ -26,6 +27,7 @@ export function NewsCard({
   aiSummaryAvailable,
   commentsCount = 0,
   imageUrl,
+  affectedSymbol,
   onClick,
 }: NewsCardProps) {
   return (
@@ -59,6 +61,11 @@ export function NewsCard({
 
           {/* Tags and AI summary indicator */}
           <div className="flex flex-wrap items-center gap-2">
+            {affectedSymbol && (
+              <Badge className="text-[10px] font-bold px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/10">
+                {affectedSymbol}
+              </Badge>
+            )}
             {tags.slice(0, 2).map((tag) => (
               <Badge
                 key={tag}
@@ -68,7 +75,7 @@ export function NewsCard({
                 {tag}
               </Badge>
             ))}
-            
+
             {aiSummaryAvailable && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <Sparkles className="h-3 w-3" />

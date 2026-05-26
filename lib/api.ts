@@ -174,10 +174,14 @@ export interface UploadUrlResponse {
 }
 
 export interface UserSearchResult {
+  id: number
   username: string
   first_name: string
   last_name: string
+  avatar_style: string | null
   is_bot: boolean
+  followers_count: number
+  posts_count: number
 }
 
 export interface TrendingTopic {
@@ -578,6 +582,11 @@ export async function getMyProfile(token: string): Promise<PublicUserProfile> {
 
 export async function getUserPublicProfile(token: string, userId: number): Promise<PublicUserProfile> {
   return apiGet(`/api/users/${userId}/profile`, token)
+}
+
+export async function getUserPosts(token: string, userId: number, page = 1): Promise<CommunityPost[]> {
+  const res = await apiGet<{ posts: CommunityPost[] }>(`/api/users/${userId}/posts?page=${page}`, token)
+  return res.posts ?? []
 }
 
 // ── Notification APIs ─────────────────────────────────────────────────────────

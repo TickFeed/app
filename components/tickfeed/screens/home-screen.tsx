@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Search, Bell, TrendingUp, RefreshCw, Layers } from "lucide-react"
+import { createPortal } from "react-dom"
+import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X } from "lucide-react"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { MarketDigest } from "../market-digest"
 import { NewsCard } from "../news-card"
@@ -38,7 +39,7 @@ const TABS = [
 
 // Module-level cache — survives component unmount/remount on tab switches
 // Bump _CACHE_VER whenever the feed response shape changes to auto-bust stale entries
-const _CACHE_VER = 2
+const _CACHE_VER = 3
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
@@ -58,6 +59,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     commentsCount: item.comments_count ?? 0,
     imageUrl: item.image_url ?? "",
     content: item.summary ?? undefined,
+    affectedSymbol: item.symbol ?? undefined,
   }
 }
 
@@ -74,6 +76,8 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   const [focusHasMore,    setFocusHasMore]    = useState(true)
   const [focusLoading,    setFocusLoading]    = useState(false)
   const [focusLoadingMore, setFocusLoadingMore] = useState(false)
+  const [stockFilter,     setStockFilter]     = useState<string | null>(null)
+  const [showStockFilterSheet, setShowStockFilterSheet] = useState(false)
   const scrollRef   = useRef<HTMLDivElement>(null)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
@@ -193,6 +197,8 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   useEffect(() => {
     fetchFeed(activeTab)
     if (activeTab === 0) fetchDigest()
+    setStockFilter(null)
+    setShowStockFilterSheet(false)
   }, [activeTab, fetchFeed, fetchDigest])
 
   // Silently refresh market ticker every 60 s while on the For You tab
@@ -312,6 +318,31 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                   <Layers className="h-3.5 w-3.5" />
                 </button>
               )}
+              {activeTab === 1 && !loading && (() => {
+                const symbols = [...new Set(news.map(a => a.affectedSymbol).filter(Boolean))] as string[]
+                if (symbols.length < 2) return null
+                return (
+                  <button
+                    onClick={() => setShowStockFilterSheet(true)}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                      stockFilter
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <SlidersHorizontal className="h-3 w-3" />
+                    {stockFilter ?? "Filter"}
+                    {stockFilter && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); setStockFilter(null) }}
+                        className="ml-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </span>
+                    )}
+                  </button>
+                )
+              })()}
             </div>
           )}
 
@@ -356,7 +387,10 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
             ) : (
               /* ── Standard list for For You + My Stocks ── */
               <div>
-                {news.map((item) => (
+                {(activeTab === 1 && stockFilter
+                  ? news.filter(a => a.affectedSymbol === stockFilter)
+                  : news
+                ).map((item) => (
                   <NewsCard
                     key={item.id}
                     source={item.source}
@@ -366,6 +400,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                     aiSummaryAvailable={item.aiSummaryAvailable}
                     commentsCount={item.commentsCount}
                     imageUrl={item.imageUrl}
+                    affectedSymbol={activeTab === 1 ? item.affectedSymbol : undefined}
                     onClick={() => onNewsClick?.(item)}
                   />
                 ))}
@@ -382,6 +417,53 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           )}
         </div>
       </div>
+
+      {/* Stock filter bottom sheet — rendered via portal to escape overflow:hidden containers */}
+      {showStockFilterSheet && createPortal((() => {
+        const symbols = [...new Set(news.map(a => a.affectedSymbol).filter(Boolean))] as string[]
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/40"
+              onClick={() => setShowStockFilterSheet(false)}
+            />
+            <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-background" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+              <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+                <span className="font-semibold text-foreground">Filter by Stock</span>
+                <button
+                  onClick={() => setShowStockFilterSheet(false)}
+                  className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-4 pt-2 pb-4 max-h-72 overflow-y-auto">
+                <button
+                  onClick={() => { setStockFilter(null); setShowStockFilterSheet(false) }}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-3 transition-colors ${
+                    stockFilter === null ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"
+                  }`}
+                >
+                  <span className="text-sm font-medium">All stocks</span>
+                  {stockFilter === null && <div className="h-2 w-2 rounded-full bg-primary" />}
+                </button>
+                {symbols.map(sym => (
+                  <button
+                    key={sym}
+                    onClick={() => { setStockFilter(sym); setShowStockFilterSheet(false) }}
+                    className={`flex w-full items-center justify-between rounded-xl px-3 py-3 transition-colors ${
+                      stockFilter === sym ? "bg-primary/10 text-primary" : "hover:bg-muted text-foreground"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{sym}</span>
+                    {stockFilter === sym && <div className="h-2 w-2 rounded-full bg-primary" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )
+      })(), document.body)}
     </div>
   )
 }

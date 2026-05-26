@@ -307,13 +307,10 @@ export function FocusModeCarousel({ articles, loading, loadingMore, hasMore, onA
       {/* ── Swipe hint ─────────────────────────────────────────────────── */}
       <div
         className="absolute inset-x-0 z-10 flex justify-center pointer-events-none transition-opacity duration-700"
-        style={{
-          bottom: "max(28px, env(safe-area-inset-bottom))",
-          opacity: showHint ? 1 : 0,
-        }}
+        style={{ top: "52%", transform: "translateY(-50%)", opacity: showHint ? 1 : 0 }}
       >
-        <div className="flex items-center gap-2 rounded-full bg-muted border border-border px-5 py-2.5">
-          <span className="text-[12px] font-medium text-muted-foreground tracking-wide">
+        <div className="flex items-center gap-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/10 px-5 py-3 shadow-xl">
+          <span className="text-[13px] font-semibold text-white tracking-wide">
             ← swipe to skip &nbsp;·&nbsp; tap to read
           </span>
         </div>

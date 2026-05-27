@@ -1,8 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Static export for Capacitor APK builds. Set CAPACITOR_BUILD=1 in the
-  // GitHub Actions APK workflow. Vercel builds normally (no env var set).
-  ...(process.env.CAPACITOR_BUILD ? { output: 'export' } : {}),
+  // 'export' for Capacitor APK builds, 'standalone' for all other builds (Docker/VM).
+  // Vercel ignores the output field and handles bundling itself.
+  output: process.env.CAPACITOR_BUILD ? 'export' : 'standalone',
 
   typescript: {
     ignoreBuildErrors: true,

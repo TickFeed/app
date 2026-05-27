@@ -1,0 +1,45 @@
+name: Linux Kernel Compilation Test
+
+on:
+  workflow_dispatch: # Manual trigger from GitHub UI only
+
+jobs:
+  compile-kernel:
+    runs-on: ubuntu-latest # Uses standard 2-core runner (Free 50k Pool)
+
+    steps:
+      - name: Install Kernel Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses-dev bison flex libssl-dev libelf-dev \
+            bc xz-utils git wget ccache
+
+      - name: Clone Stable Linux Kernel Source
+        run: |
+          # Clones only the latest stable branch history to save disk space
+          echo "Cloning stable kernel repository..."
+          git clone --depth 1 --branch linux-6.12.y https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+          
+      - name: Configure Kernel
+        run: |
+          cd linux
+          # Generates standard default config file (.config) for x86_64
+          make defconfig
+          
+          # Fix common Ubuntu/Debian certificate compilation blockers
+          scripts/config --disable SYSTEM_REVOCATION_KEYS
+          scripts/config --disable SYSTEM_TRUSTED_KEYS
+
+      - name: Execute Multi-Threaded Build
+        run: |
+          cd linux
+          CORES=$(nproc)
+          echo "System hardware has ${CORES} vCPUs available."
+          echo "Starting full compilation loop..."
+          
+          # Starts the heavy build process
+          # -j$(nproc) tells the system to peg all available hardware threads
+          make -j${CORES} bzImage modules
+          
+          echo "SUCCESS: Bootable bzImage kernel and modules compiled successfully."

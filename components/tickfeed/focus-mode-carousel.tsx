@@ -261,34 +261,11 @@ export function FocusModeCarousel({ articles, loading, loadingMore, hasMore, onA
         </div>
       )}
 
-      {/* ── HUD: progress bar + exit — always on top ───────────────────── */}
+      {/* ── HUD: exit + loading — always on top ────────────────────────── */}
       <div
-        className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-4"
+        className="absolute inset-x-0 top-0 z-10 flex items-center justify-end gap-3 px-4"
         style={{ paddingTop: "max(16px, env(safe-area-inset-top))", paddingBottom: "12px" }}
       >
-        {/* Progress segments */}
-        <div className="flex flex-1 items-center gap-[3px]">
-          {total <= 30
-            ? articles.map((_, i) => (
-                <div
-                  key={i}
-                  className="h-[3px] rounded-full transition-all"
-                  style={{
-                    flex: i === currentIndex ? 2.2 : 1,
-                    backgroundColor: i < currentIndex ? "hsl(var(--primary) / 0.7)" : i === currentIndex ? "hsl(var(--primary))" : "hsl(var(--muted-foreground) / 0.25)",
-                  }}
-                />
-              ))
-            : (
-              <div className="flex-1 h-[3px] rounded-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all duration-500"
-                  style={{ width: `${((currentIndex + 1) / total) * 100}%` }}
-                />
-              </div>
-            )}
-        </div>
-
         {/* Loading more indicator */}
         {loadingMore && (
           <div className="shrink-0 h-4 w-4 rounded-full border-2 border-border border-t-primary animate-spin" />

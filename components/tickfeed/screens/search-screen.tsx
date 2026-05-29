@@ -34,23 +34,21 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
   }
 }
 
-// Curated category chips shown even without trending data
 const CATEGORY_CHIPS = [
   "RBI Policy", "Q4 Results", "FII Flows", "Nifty50",
   "IPO", "Budget", "Sensex", "Inflation",
 ]
 
 export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProps) {
-  const [query, setQuery]           = useState("")
-  const [results, setResults]       = useState<FeedItem[]>([])
-  const [loading, setLoading]       = useState(false)
-  const [trending, setTrending]     = useState<TrendingTopic[]>([])
-  const [searched, setSearched]     = useState(false)
+  const [query, setQuery]       = useState("")
+  const [results, setResults]   = useState<FeedItem[]>([])
+  const [loading, setLoading]   = useState(false)
+  const [trending, setTrending] = useState<TrendingTopic[]>([])
+  const [searched, setSearched] = useState(false)
 
-  const inputRef   = useRef<HTMLInputElement>(null)
+  const inputRef    = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Auto-focus and load trending topics on mount
   useEffect(() => {
     inputRef.current?.focus()
     getTrendingTopics(token).then(setTrending).catch(() => {})
@@ -66,8 +64,7 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
     setLoading(true)
     setSearched(true)
     try {
-      const items = await searchArticles(token, q.trim())
-      setResults(items)
+      setResults(await searchArticles(token, q.trim()))
     } catch {
       setResults([])
     } finally {
@@ -94,7 +91,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
     inputRef.current?.focus()
   }
 
-  // Merge trending symbols + category chips, dedupe, cap at 12
   const suggestions: string[] = [
     ...trending.slice(0, 6).map((t) => t.topic),
     ...CATEGORY_CHIPS,
@@ -102,7 +98,7 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
 
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Sticky search header */}
+      {/* Sticky header */}
       <header className="flex items-center gap-2 px-3 py-3 bg-background border-b border-border sticky top-0 z-10">
         <button
           onClick={onBack}
@@ -110,7 +106,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <input
@@ -134,7 +129,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
       {/* Body */}
       <div className="flex-1 overflow-y-auto">
         {!searched ? (
-          /* ── Suggestions / empty state ── */
           <div className="px-4 pt-5">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Trending on TickFeed
@@ -152,7 +146,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
             </div>
           </div>
         ) : loading ? (
-          /* ── Skeleton ── */
           <div className="space-y-0 pt-2">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="px-4 py-4 border-b border-border/50 animate-pulse">
@@ -166,7 +159,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
             ))}
           </div>
         ) : results.length > 0 ? (
-          /* ── Results ── */
           <div>
             <p className="px-4 py-2.5 text-xs text-muted-foreground">
               {results.length} result{results.length !== 1 ? "s" : ""} for &ldquo;{query}&rdquo;
@@ -189,7 +181,6 @@ export function SearchScreen({ token, onBack, onArticleClick }: SearchScreenProp
             })}
           </div>
         ) : (
-          /* ── No results ── */
           <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
             <Newspaper className="mb-4 h-12 w-12 text-muted-foreground/30" />
             <p className="text-sm font-medium text-foreground">No articles found</p>

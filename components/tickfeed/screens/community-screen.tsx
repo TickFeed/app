@@ -7,17 +7,17 @@ import { createPortal } from "react-dom"
 import {
   Search, TrendingUp, X, Plus, Heart, MessageCircle,
   RefreshCw, Bot, Image as ImageIcon, BarChart2, ChevronLeft, Send, AlertCircle, Share2, Zap,
-  MoreVertical, Trash2, Flag,
+  MoreVertical, Trash2, Flag, Users,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import {
   getCommunityPosts, createPost, likePost, unlikePost,
-  getPostComments, searchCommunityPosts, followUser, unfollowUser,
-  dicebearUrl, getUserPublicProfile, getPostById,
+  getPostComments, searchCommunityPosts, searchUsers, followUser, unfollowUser,
+  dicebearUrl, getUserPublicProfile, getUserPosts, getPostById,
   requestUploadUrl, uploadToBlob, votePoll, deletePost, reportPost,
   formatRelativeTime, API_BASE,
-  type CommunityPost, type PublicUserProfile,
+  type CommunityPost, type PublicUserProfile, type UserSearchResult,
 } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
@@ -1321,9 +1321,9 @@ const TABS = [
   { label: "My Posts",  tab: "mine"      as const },
 ]
 
-interface CommunityScreenProps { token: string; initialPostId?: number }
+interface CommunityScreenProps { token: string; initialPostId?: number; onUserClick?: (userId: number) => void }
 
-export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) {
+export function CommunityScreen({ token, initialPostId, onUserClick }: CommunityScreenProps) {
   const myUserId = getMyUserId(token)
 
   const [activeTab,   setActiveTab]   = useState(0)
@@ -1335,13 +1335,17 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
   const [searchQuery,   setSearchQuery]   = useState("")
   const [searchResults, setSearchResults] = useState<CommunityPost[]>([])
   const [searching,     setSearching]     = useState(false)
+  const [searchTab,     setSearchTab]     = useState<"posts" | "people">("posts")
+  const [searchPeople,  setSearchPeople]  = useState<UserSearchResult[]>([])
 
   const [composeOpen,   setComposeOpen]   = useState(false)
   const [selectedPost,  setSelectedPost]  = useState<CommunityPost | null>(null)
   const [newPostCount,  setNewPostCount]  = useState(0)
 
-  const [profileUser,   setProfileUser]   = useState<PublicUserProfile | null>(null)
-  const [profileLoading, setProfileLoading] = useState(false)
+  const [profileUser,        setProfileUser]        = useState<PublicUserProfile | null>(null)
+  const [profileLoading,     setProfileLoading]     = useState(false)
+  const [profileUserPosts,   setProfileUserPosts]   = useState<CommunityPost[]>([])
+  const [profilePostsLoading,setProfilePostsLoading]= useState(false)
 
   const searchRef  = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1401,18 +1405,27 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
   const { pullState } = usePullToRefresh(scrollRef, handlePullRefresh)
 
   // ── Search ───────────────────────────────────────────────────────────
-  const runSearch = useCallback(async (q: string) => {
-    if (!q.trim()) { setSearchResults([]); return }
+  const runSearch = useCallback(async (q: string, tab: "posts" | "people") => {
+    if (!q.trim()) { setSearchResults([]); setSearchPeople([]); return }
     setSearching(true)
-    try { setSearchResults(await searchCommunityPosts(token, q)) }
-    catch { setSearchResults([]) }
-    finally { setSearching(false) }
+    try {
+      if (tab === "posts") setSearchResults(await searchCommunityPosts(token, q))
+      else setSearchPeople(await searchUsers(token, q))
+    } catch {
+      if (tab === "posts") setSearchResults([])
+      else setSearchPeople([])
+    } finally { setSearching(false) }
   }, [token])
 
   const handleSearchChange = (val: string) => {
     setSearchQuery(val)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => runSearch(val), 350)
+    debounceRef.current = setTimeout(() => runSearch(val, searchTab), 350)
+  }
+
+  const handleSearchTabChange = (tab: "posts" | "people") => {
+    setSearchTab(tab)
+    if (searchQuery.trim()) runSearch(searchQuery, tab)
   }
 
   const openSearch = () => {
@@ -1423,6 +1436,8 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
     setSearchOpen(false)
     setSearchQuery("")
     setSearchResults([])
+    setSearchPeople([])
+    setSearchTab("posts")
   }
 
   // ── Like ─────────────────────────────────────────────────────────────
@@ -1527,6 +1542,15 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
     }
   }
 
+  useEffect(() => {
+    if (!profileUser) { setProfileUserPosts([]); return }
+    setProfilePostsLoading(true)
+    getUserPosts(token, profileUser.id)
+      .then(setProfileUserPosts)
+      .catch(() => setProfileUserPosts([]))
+      .finally(() => setProfilePostsLoading(false))
+  }, [profileUser?.id, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Load new posts from banner tap ───────────────────────────────────
   const handleLoadNew = async () => {
     setNewPostCount(0)
@@ -1535,7 +1559,7 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
   }
 
   // ── Render ────────────────────────────────────────────────────────────
-  const displayPosts = searchOpen && searchQuery ? searchResults : posts
+  const displayPosts = searchOpen && searchQuery && searchTab === "posts" ? searchResults : (searchOpen && searchTab === "people" ? [] : posts)
 
   return (
     <div className="flex h-full flex-col bg-background relative">
@@ -1543,26 +1567,42 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
       {/* ── Header ── */}
       <header className="px-4 pb-2 pt-4 bg-background sticky top-0 z-10 border-b border-border/50">
         {searchOpen ? (
-          <div className="flex items-center gap-2">
-            <button onClick={closeSearch} className="rounded-full p-1.5 hover:bg-muted transition-colors">
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <input
-                ref={searchRef}
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                placeholder="Search community posts…"
-                className="w-full rounded-full bg-muted py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              {searchQuery && (
-                <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
+          <>
+            <div className="flex items-center gap-2">
+              <button onClick={closeSearch} className="rounded-full p-1.5 hover:bg-muted transition-colors">
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <input
+                  ref={searchRef}
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  placeholder={searchTab === "people" ? "Search creators & investors…" : "Search community posts…"}
+                  className="w-full rounded-full bg-muted py-2.5 pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                {searchQuery && (
+                  <button onClick={() => handleSearchChange("")} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+            <div className="flex gap-1 pt-2">
+              {(["posts", "people"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => handleSearchTabChange(tab)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                    searchTab === tab ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab === "people" ? <Users className="h-3 w-3" /> : <MessageCircle className="h-3 w-3" />}
+                  {tab === "posts" ? "Posts" : "People"}
+                </button>
+              ))}
+            </div>
+          </>
         ) : (
           <div className="flex items-center justify-between">
             <div>
@@ -1619,8 +1659,67 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
 
       {/* ── Post list ── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto pb-20">
-        {/* Search state */}
-        {searchOpen && searchQuery && (
+        {/* Search — people results */}
+        {searchOpen && searchTab === "people" && !searchQuery && (
+          <div className="flex flex-col items-center justify-center py-24 text-center px-8">
+            <div className="mb-5 h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
+              <Users className="h-10 w-10 text-primary/60" />
+            </div>
+            <p className="text-base font-semibold text-foreground mb-1">Find people</p>
+            <p className="text-sm text-muted-foreground">Search by name or username to discover creators and investors</p>
+          </div>
+        )}
+
+        {searchOpen && searchTab === "people" && searchQuery && (
+          searching ? (
+            <Fragment>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse border-b border-border/50">
+                  <div className="h-11 w-11 rounded-full bg-muted shrink-0" />
+                  <div className="flex-1">
+                    <div className="h-3 w-28 rounded bg-muted mb-1.5" />
+                    <div className="h-3 w-20 rounded bg-muted" />
+                  </div>
+                </div>
+              ))}
+            </Fragment>
+          ) : (
+            <div>
+              {searchPeople.map((u) => {
+                const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username
+                const initials = ((u.first_name?.[0] ?? u.username?.[0] ?? "?") + (u.last_name?.[0] ?? "")).toUpperCase()
+                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username
+                  ? dicebearUrl(u.avatar_style, u.username)
+                  : ""
+                return (
+                  <button
+                    key={u.id ?? u.username}
+                    onClick={() => u.id != null && handleUserClick(u.id)}
+                    className="flex w-full items-center gap-3 px-4 py-3 hover:bg-muted/50 transition-colors border-b border-border/50"
+                  >
+                    <div className="h-11 w-11 rounded-full overflow-hidden bg-primary shrink-0">
+                      {avatarSrc
+                        ? <img src={avatarSrc} alt={initials} className="h-full w-full object-cover" />
+                        : <div className="flex h-full w-full items-center justify-center text-sm font-bold text-primary-foreground">{initials}</div>
+                      }
+                    </div>
+                    <div className="flex-1 text-left min-w-0">
+                      <p className="font-semibold text-sm text-foreground truncate">{name}</p>
+                      <p className="text-xs text-muted-foreground">@{u.username}</p>
+                    </div>
+                    <div className="text-right text-xs text-muted-foreground shrink-0">
+                      <p className="font-medium text-foreground">{u.followers_count}</p>
+                      <p>followers</p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )
+        )}
+
+        {/* Search — posts count label */}
+        {searchOpen && searchTab === "posts" && searchQuery && (
           <p className="px-4 py-2.5 text-xs text-muted-foreground border-b border-border/50">
             {searching ? "Searching…" : `${searchResults.length} result${searchResults.length !== 1 ? "s" : ""} for "${searchQuery}"`}
           </p>
@@ -1650,7 +1749,7 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
             <p className="text-muted-foreground text-sm">{error}</p>
             <button onClick={() => fetchPosts(activeTab)} className="mt-3 text-sm text-primary hover:underline">Try again</button>
           </div>
-        ) : displayPosts.length === 0 ? (
+        ) : displayPosts.length === 0 && !(searchOpen && searchTab === "people") ? (
           <div className="flex flex-col items-center justify-center py-20 px-8 text-center">
             <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
               {searchOpen
@@ -1682,7 +1781,7 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
               onComment={setSelectedPost}
               onFollow={handleFollow}
               onVoted={handleVoted}
-              onUserClick={handleUserClick}
+              onUserClick={onUserClick ?? handleUserClick}
               onDelete={handleDelete}
               onReport={handleReport}
             />
@@ -1788,6 +1887,52 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
                     </div>
                   ))}
                 </div>
+
+                {/* Posts */}
+                <div className="border-t border-border/50">
+                  <p className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Posts</p>
+                  {profilePostsLoading ? (
+                    <Fragment>
+                      {[1, 2, 3].map((i) => (
+                        <div key={i} className="border-b border-border/50 px-4 py-3 space-y-2">
+                          <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                          <div className="h-4 w-full rounded bg-muted animate-pulse" />
+                          <div className="h-4 w-3/4 rounded bg-muted animate-pulse" />
+                        </div>
+                      ))}
+                    </Fragment>
+                  ) : profileUserPosts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center">
+                      <MessageCircle className="mb-3 h-8 w-8 text-muted-foreground/30" />
+                      <p className="text-sm text-muted-foreground">No posts yet</p>
+                    </div>
+                  ) : (
+                    profileUserPosts.map((post) => (
+                      <div key={post.id} className="border-b border-border/50 px-4 py-3 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          {post.symbol && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                              {post.symbol}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">{formatRelativeTime(post.created_at)}</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.content}</p>
+                        {post.image_url && (
+                          <img src={post.image_url} alt="" className="mt-2 rounded-xl w-full object-cover max-h-48" />
+                        )}
+                        <div className="flex items-center gap-4 pt-1">
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Heart className="h-3.5 w-3.5" />{post.likes_count}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MessageCircle className="h-3.5 w-3.5" />{post.comments_count}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )
           })() : null}
@@ -1801,7 +1946,7 @@ export function CommunityScreen({ token, initialPostId }: CommunityScreenProps) 
           token={token}
           myUserId={myUserId}
           initialTickrPending={/@tickr\b/i.test(selectedPost.content) && selectedPost.comments_count === 0}
-          onUserClick={handleUserClick}
+          onUserClick={onUserClick ?? handleUserClick}
           onClose={(finalCount) => {
             setPosts((prev) =>
               prev.map((p) =>

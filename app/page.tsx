@@ -32,6 +32,7 @@ import {
   type AuthUser,
   type NewUserProfile,
 } from "@/lib/auth"
+import { getUserPublicProfile, type PublicUserProfile } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
 export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search"
@@ -47,6 +48,7 @@ export interface NewsArticle {
   commentsCount: number
   imageUrl: string
   content?: string
+  affectedSymbol?: string
 }
 
 
@@ -77,6 +79,8 @@ export default function TickFeedApp() {
   const [stockInitialTab, setStockInitialTab] = useState<"overview" | "ai-chat" | "discuss" | undefined>(undefined)
   const [preArticlePreviousScreen, setPreArticlePreviousScreen] = useState<Screen>("home")
   const [initialCommunityPostId, setInitialCommunityPostId] = useState<number | undefined>(undefined)
+  const [profileInitialUserId, setProfileInitialUserId] = useState<number | undefined>(undefined)
+  const [profileInitialUser, setProfileInitialUser] = useState<PublicUserProfile | null>(null)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -356,8 +360,14 @@ export default function TickFeedApp() {
 
   const token = authSession?.token ?? ""
 
-  // Track screen views
-  useEffect(() => { logScreenView(currentScreen) }, [currentScreen])
+  // Track screen views; clear profile-user state when leaving profile
+  useEffect(() => {
+    logScreenView(currentScreen)
+    if (currentScreen !== "profile") {
+      setProfileInitialUserId(undefined)
+      setProfileInitialUser(null)
+    }
+  }, [currentScreen])
 
   // Set / clear analytics user identity
   useEffect(() => {
@@ -515,10 +525,25 @@ export default function TickFeedApp() {
           />
         ) : null
       case "community":
-        return <CommunityScreen token={token} initialPostId={initialCommunityPostId} />
+        return (
+          <CommunityScreen
+            token={token}
+            initialPostId={initialCommunityPostId}
+            onUserClick={async (userId) => {
+              setProfileInitialUserId(userId)
+              setActiveTab("profile")
+              setCurrentScreen("profile")
+              try {
+                const profile = await getUserPublicProfile(token, userId)
+                setProfileInitialUser(profile)
+              } catch {}
+            }}
+          />
+        )
       case "profile":
         return authSession ? (
           <ProfileScreen
+            key={profileInitialUserId ?? 0}
             user={authSession.user}
             token={token}
             onSignOut={handleSignOut}
@@ -526,6 +551,8 @@ export default function TickFeedApp() {
             onArticleClick={handleNewsClick}
             onStockClick={handleStockClick}
             onUpdateUser={handleUpdateUser}
+            initialUserId={profileInitialUserId}
+            initialUser={profileInitialUser}
           />
         ) : null
       default:

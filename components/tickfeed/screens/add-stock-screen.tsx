@@ -140,7 +140,7 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-28">
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 7rem)' }}>
         {searchQuery.trim() ? (
           <>
             <div className="px-4 pb-2">
@@ -227,7 +227,10 @@ export function AddStockScreen({ token, onBack }: AddStockScreenProps) {
 
       {/* Floating confirm button */}
       {selected.size > 0 && (
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-6 pt-3 bg-gradient-to-t from-background via-background to-transparent">
+        <div
+          className="absolute bottom-0 left-0 right-0 px-4 pt-3 bg-gradient-to-t from-background via-background to-transparent"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 1.5rem)' }}
+        >
           <button
             onClick={handleConfirm}
             disabled={saving}

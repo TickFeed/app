@@ -12,12 +12,14 @@ import type { NewsArticle } from "@/app/page"
 import {
   getNewsFeed,
   getMarketDigest,
+  getWatchlist,
   formatRelativeTime,
   sourceToIcon,
   getUnreadCount,
   API_BASE,
   type FeedItem,
   type MarketDigestResponse,
+  type WatchlistItem,
 } from "@/lib/api"
 import { usePolling } from "@/hooks/use-polling"
 
@@ -78,6 +80,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   const [focusLoadingMore, setFocusLoadingMore] = useState(false)
   const [stockFilter,     setStockFilter]     = useState<string | null>(null)
   const [showStockFilterSheet, setShowStockFilterSheet] = useState(false)
+  const [watchlist,       setWatchlist]       = useState<WatchlistItem[]>([])
   const scrollRef   = useRef<HTMLDivElement>(null)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
@@ -197,9 +200,12 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   useEffect(() => {
     fetchFeed(activeTab)
     if (activeTab === 0) fetchDigest()
+    if (activeTab === 1 && watchlist.length === 0) {
+      getWatchlist(token).then(setWatchlist).catch(() => {})
+    }
     setStockFilter(null)
     setShowStockFilterSheet(false)
-  }, [activeTab, fetchFeed, fetchDigest])
+  }, [activeTab, fetchFeed, fetchDigest]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Silently refresh market ticker every 60 s while on the For You tab
   usePolling(() => fetchDigest(true), DIGEST_POLL_MS, activeTab === 0)
@@ -319,7 +325,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                 </button>
               )}
               {activeTab === 1 && !loading && (() => {
-                const symbols = [...new Set(news.map(a => a.affectedSymbol).filter(Boolean))] as string[]
+                const symbols = watchlist.map(w => w.symbol)
                 if (symbols.length < 2) return null
                 return (
                   <button
@@ -387,23 +393,36 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
             ) : (
               /* ── Standard list for For You + My Stocks ── */
               <div>
-                {(activeTab === 1 && stockFilter
-                  ? news.filter(a => a.affectedSymbol === stockFilter)
-                  : news
-                ).map((item) => (
-                  <NewsCard
-                    key={item.id}
-                    source={item.source}
-                    timestamp={item.timestamp}
-                    headline={item.headline}
-                    tags={item.tags}
-                    aiSummaryAvailable={item.aiSummaryAvailable}
-                    commentsCount={item.commentsCount}
-                    imageUrl={item.imageUrl}
-                    affectedSymbol={activeTab === 1 ? item.affectedSymbol : undefined}
-                    onClick={() => onNewsClick?.(item)}
-                  />
-                ))}
+                {(() => {
+                  const filtered = activeTab === 1 && stockFilter
+                    ? news.filter(a => a.affectedSymbol === stockFilter)
+                    : news
+                  if (filtered.length === 0 && stockFilter) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                        <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                          <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground">No recent news for {stockFilter}</p>
+                        <p className="text-sm text-muted-foreground/70 mt-1">Check back later for updates</p>
+                      </div>
+                    )
+                  }
+                  return filtered.map((item) => (
+                    <NewsCard
+                      key={item.id}
+                      source={item.source}
+                      timestamp={item.timestamp}
+                      headline={item.headline}
+                      tags={item.tags}
+                      aiSummaryAvailable={item.aiSummaryAvailable}
+                      commentsCount={item.commentsCount}
+                      imageUrl={item.imageUrl}
+                      affectedSymbol={activeTab === 1 ? item.affectedSymbol : undefined}
+                      onClick={() => onNewsClick?.(item)}
+                    />
+                  ))
+                })()}
               </div>
             )
           ) : (
@@ -420,7 +439,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
 
       {/* Stock filter bottom sheet — rendered via portal to escape overflow:hidden containers */}
       {showStockFilterSheet && createPortal((() => {
-        const symbols = [...new Set(news.map(a => a.affectedSymbol).filter(Boolean))] as string[]
+        const symbols = watchlist.map(w => w.symbol)
         return (
           <>
             <div

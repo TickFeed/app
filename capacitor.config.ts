@@ -11,7 +11,8 @@ const config: CapacitorConfig = {
     },
   },
   server: {
-    androidScheme: 'https',
+    url: 'https://tickfeed.in',
+    cleartext: false,
   },
   plugins: {
     GoogleAuth: {

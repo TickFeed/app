@@ -38,6 +38,16 @@ export function useNativePush(
         const permission = await PushNotificationsModule.requestPermissions()
         if (permission.receive !== "granted") return
 
+        // High-importance channel so notifications appear as heads-up banners on Android 8+.
+        // IMPORTANCE_HIGH = 4; without this they silently land in the shade with no pop-up.
+        await PushNotificationsModule.createChannel({
+          id: "tickfeed_default",
+          name: "TickFeed Notifications",
+          importance: 4,
+          vibration: true,
+          sound: "default",
+        })
+
         // Listeners must be registered BEFORE register() — the registration event
         // fires synchronously and would be missed if listeners are added after.
         await PushNotificationsModule.addListener("registration", ({ value: fcmToken }) => {
@@ -50,13 +60,34 @@ export function useNativePush(
           console.warn("[native-push] registration error:", err)
         })
 
-        await PushNotificationsModule.addListener("pushNotificationReceived", ({ notification }) => {
-          // Android suppresses FCM notifications when the app is in the foreground.
-          // Re-route the payload to the tap handler so the user sees it as an in-app action.
+        await PushNotificationsModule.addListener("pushNotificationReceived", async ({ notification }) => {
+          // Android suppresses FCM data-only messages when the app is in the foreground.
+          // Show a local heads-up notification so it pops on screen.
           try {
-            onTapRef.current((notification.data ?? {}) as PushNotificationData)
-          } catch (err) {
-            console.warn("[native-push] foreground notification handler failed:", err)
+            const { LocalNotifications } = await import("@capacitor/local-notifications")
+            await LocalNotifications.requestPermissions()
+            await LocalNotifications.createChannel({
+              id: "tickfeed_default",
+              name: "TickFeed Notifications",
+              importance: 4,
+              vibration: true,
+              sound: "default",
+            })
+            await LocalNotifications.addListener("localNotificationActionPerformed", ({ notification: ln }) => {
+              try { onTapRef.current((ln.extra ?? {}) as PushNotificationData) } catch {}
+            })
+            await LocalNotifications.schedule({
+              notifications: [{
+                id: Date.now(),
+                title: notification.title ?? "TickFeed",
+                body: notification.body ?? "",
+                channelId: "tickfeed_default",
+                extra: notification.data ?? {},
+              }],
+            })
+          } catch {
+            // LocalNotifications not available — fall back to silent in-app routing
+            try { onTapRef.current((notification.data ?? {}) as PushNotificationData) } catch {}
           }
         })
 

@@ -1301,16 +1301,20 @@ function calcAlphaScore(posts: number, likes: number, followers: number) {
   return posts * 15 + likes * 8 + followers * 25
 }
 const ALPHA_TIERS = [
-  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
-  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
-  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
-  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
-  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
-  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
-  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted",     border: "border-border"        },
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",        barBg: "bg-amber-500",        bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
+  { min: 1500, label: "Shark",         color: "text-purple-500",       barBg: "bg-purple-500",       bg: "bg-purple-500/10",  border: "border-purple-500/30" },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",         barBg: "bg-blue-500",         bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
+  { min: 300,  label: "Bull",          color: "text-emerald-500",      barBg: "bg-emerald-500",      bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
+  { min: 100,  label: "Analyst",       color: "text-primary",          barBg: "bg-primary",          bg: "bg-primary/10",     border: "border-primary/30"    },
+  { min: 1,    label: "Observer",      color: "text-foreground",       barBg: "bg-foreground",       bg: "bg-muted",          border: "border-border"        },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", barBg: "bg-muted-foreground", bg: "bg-muted",          border: "border-border"        },
 ]
 function alphaTier(score: number) {
   return ALPHA_TIERS.find((t) => score >= t.min) ?? ALPHA_TIERS[ALPHA_TIERS.length - 1]
+}
+function alphaNextTier(score: number) {
+  const idx = ALPHA_TIERS.findIndex((t) => score >= t.min)
+  return idx > 0 ? ALPHA_TIERS[idx - 1] : null
 }
 
 // ── Main community screen ──────────────────────────────────────────────────
@@ -1835,6 +1839,8 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
             const avatarSrc = dicebearUrl(profileUser.avatar_style, profileUser.username ?? "")
             const score = calcAlphaScore(profileUser.posts_count, profileUser.likes_received, profileUser.followers_count)
             const tier = alphaTier(score)
+            const next = alphaNextTier(score)
+            const progress = next ? Math.min(((score - tier.min) / (next.min - tier.min)) * 100, 100) : 100
             const isOwnProfile = profileUser.id === myUserId
             return (
               <div className="flex-1 overflow-y-auto">
@@ -1863,15 +1869,25 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                 </div>
 
                 {/* Alpha score card */}
-                <div className={`mx-4 mb-4 rounded-2xl border p-4 ${tier.bg} ${tier.border}`}>
-                  <div className="flex items-center justify-between">
+                <div className={`mx-4 mb-3 rounded-xl border p-4 ${tier.border} ${tier.bg}`}>
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Zap className={`h-4 w-4 ${tier.color}`} />
-                      <span className={`text-sm font-bold ${tier.color}`}>{tier.label}</span>
+                      <span className="text-sm font-bold text-foreground">Alpha Score</span>
                     </div>
-                    <span className={`text-lg font-black ${tier.color}`}>{score.toLocaleString()}</span>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${tier.border} ${tier.bg} ${tier.color}`}>
+                      {tier.label}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">Alpha Score</p>
+                  <div className={`text-3xl font-black mb-1 ${tier.color}`}>{score.toLocaleString()}</div>
+                  {next && (
+                    <>
+                      <div className="h-1.5 w-full rounded-full bg-background/60 overflow-hidden mb-1">
+                        <div className={`h-full rounded-full transition-all ${tier.barBg}`} style={{ width: `${progress}%` }} />
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">{next.min - score} pts to <span className="font-semibold">{next.label}</span></p>
+                    </>
+                  )}
                 </div>
 
                 {/* Stats row */}
@@ -1881,9 +1897,9 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                     { label: "Followers", value: profileUser.followers_count },
                     { label: "Following", value: profileUser.following_count },
                   ].map(({ label, value }) => (
-                    <div key={label} className="rounded-2xl bg-muted/50 border border-border/50 p-3 text-center">
-                      <p className="text-lg font-black text-foreground">{value}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+                    <div key={label} className="rounded-lg border border-border bg-card p-3 text-center">
+                      <p className="text-2xl font-bold text-foreground">{value}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
                     </div>
                   ))}
                 </div>

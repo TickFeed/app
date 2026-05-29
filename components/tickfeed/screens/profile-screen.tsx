@@ -563,15 +563,17 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                 </div>
 
                 {/* Social stats */}
-                <div className="mx-4 mt-3 grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border border-border bg-card p-3 text-center">
-                    <p className="text-2xl font-bold text-foreground">{u.followers_count}</p>
-                    <p className="text-xs text-muted-foreground">Followers</p>
-                  </div>
-                  <div className="rounded-lg border border-border bg-card p-3 text-center">
-                    <p className="text-2xl font-bold text-foreground">{u.following_count}</p>
-                    <p className="text-xs text-muted-foreground">Following</p>
-                  </div>
+                <div className="mx-4 mt-3 grid grid-cols-3 gap-3">
+                  {[
+                    { label: "Posts",     value: u.posts_count },
+                    { label: "Followers", value: u.followers_count },
+                    { label: "Following", value: u.following_count },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="rounded-lg border border-border bg-card p-3 text-center">
+                      <p className="text-2xl font-bold text-foreground">{value}</p>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Posts */}

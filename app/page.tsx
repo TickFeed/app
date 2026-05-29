@@ -369,12 +369,14 @@ export default function TickFeedApp() {
   usePushNotifications(authSession ? token : null)
 
   // Native push (FCM) — Capacitor Android
-  const handleNativePushTap = useCallback((data: { target_type?: string; target_id?: string; target_tab?: string }) => {
-    const { target_type, target_id, target_tab } = data
+  const handleNativePushTap = useCallback((data: { target_type?: string; target_id?: string; target_tab?: string; source_post_id?: string }) => {
+    const { target_type, target_id, target_tab, source_post_id } = data
     if (target_type === "article" && target_id) {
       handleNotificationNavigateToArticle(Number(target_id), target_tab)
     } else if (target_type === "stock" && target_id) {
       handleNotificationNavigateToStock(target_id, target_tab)
+    } else if (source_post_id) {
+      handleNotificationNavigateToCommunityPost(Number(source_post_id))
     } else {
       setActiveTab("home")
       setCurrentScreen("notifications")

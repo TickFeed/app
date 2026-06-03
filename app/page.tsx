@@ -16,7 +16,6 @@ import { ProfileScreen } from "@/components/tickfeed/screens/profile-screen"
 import { AuthScreen } from "@/components/tickfeed/screens/auth-screen"
 import { NotificationsScreen } from "@/components/tickfeed/screens/notifications-screen"
 import { SearchScreen } from "@/components/tickfeed/screens/search-screen"
-import { GlobalAIScreen } from "@/components/tickfeed/screens/global-ai-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
 import {
   clearAuthSession,
@@ -36,7 +35,7 @@ import {
 import { getUserPublicProfile, type PublicUserProfile } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
-export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search" | "ai"
+export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search"
 
 export interface NewsArticle {
   id: string
@@ -114,7 +113,6 @@ export default function TickFeedApp() {
     else if (tab === "watchlist") setCurrentScreen("watchlist")
     else if (tab === "community") { setCurrentScreen("community"); setInitialCommunityPostId(undefined) }
     else if (tab === "profile") setCurrentScreen("profile")
-    else if (tab === "ai") setCurrentScreen("ai")
   }
 
   const handleNewsClick = (article: NewsArticle) => {
@@ -558,8 +556,6 @@ export default function TickFeedApp() {
             initialUser={profileInitialUser}
           />
         ) : null
-      case "ai":
-        return <GlobalAIScreen token={token} />
       default:
         return <HomeScreen token={token} onNewsClick={handleNewsClick} onNotificationsClick={() => setCurrentScreen("notifications")} />
     }

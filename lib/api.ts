@@ -254,9 +254,13 @@ const LOGO_COLORS = [
 ]
 
 export function dicebearUrl(style: string | null | undefined, seed: string): string {
-  const s = style && style !== "initials" ? style : null
-  if (!s) return ""
-  return `https://api.dicebear.com/9.x/${s}/svg?seed=${encodeURIComponent(seed)}&size=80`
+  if (!style || style === "initials") return ""
+  // Compound format "style:customSeed" stores a pinned random seed
+  if (style.includes(":")) {
+    const [s, customSeed] = style.split(":", 2)
+    return `https://api.dicebear.com/9.x/${s}/svg?seed=${encodeURIComponent(customSeed)}&size=80`
+  }
+  return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&size=80`
 }
 
 export function symbolToName(symbol: string): string {
@@ -420,8 +424,23 @@ export async function getStockDetail(token: string, symbol: string): Promise<Sto
 
 // ── Watchlist APIs ────────────────────────────────────────────────────────────
 
+export interface StockEvent {
+  id: number
+  symbol: string
+  event_type: "DIVIDEND" | "BONUS" | "SPLIT" | "RESULTS" | "AGM" | "BOARD_MEETING" | "OTHER"
+  event_date: string
+  record_date: string | null
+  ai_summary: string | null
+  created_at: string
+}
+
 export async function getWatchlist(token: string): Promise<WatchlistItem[]> {
   return apiGet('/api/watchlist', token)
+}
+
+export async function getWatchlistEvents(token: string, days = 30): Promise<StockEvent[]> {
+  const res = await apiGet<{ events: StockEvent[] }>(`/api/watchlist/events?days=${days}`, token)
+  return res.events ?? []
 }
 
 export async function addToWatchlist(

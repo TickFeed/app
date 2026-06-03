@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react"
 import {
   ChevronLeft,
-  Bell,
-  BellOff,
   Newspaper,
   Sparkles,
   ChevronRight,
@@ -39,7 +37,6 @@ interface StockDetailScreenProps {
 
 export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initialTab }: StockDetailScreenProps) {
   const [stock, setStock] = useState<StockDetail | null>(null)
-  const [alertsEnabled, setAlertsEnabled] = useState(true)
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [loadingStock, setLoadingStock] = useState(true)
@@ -130,14 +127,6 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
           <span className="text-sm font-medium">Back</span>
         </button>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setAlertsEnabled(!alertsEnabled)}
-            className={`rounded-full p-2 transition-colors ${
-              alertsEnabled ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {alertsEnabled ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
-          </button>
         </div>
       </header>
 

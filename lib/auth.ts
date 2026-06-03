@@ -1,6 +1,6 @@
 export type AuthStep = 'method' | 'email' | 'otp' | 'profile' | 'authenticated'
 
-export type AvatarStyle = "initials" | "micah" | "personas" | "notionists-neutral" | "lorelei-neutral" | "shapes"
+export type AvatarStyle = string
 
 export interface AuthUser {
   id: string
@@ -82,10 +82,8 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
   return res.json()
 }
 
-const VALID_AVATAR_STYLES: AvatarStyle[] = ["initials", "micah", "personas", "notionists-neutral", "lorelei-neutral", "shapes"]
-
 function mapUser(raw: Record<string, unknown>): AuthUser {
-  const rawStyle = (raw.avatarStyle ?? raw.avatar_style) as string | undefined
+  const rawStyle = ((raw.avatarStyle ?? raw.avatar_style) as string | undefined) ?? "initials"
   return {
     id: String(raw.id),
     email: (raw.email as string) ?? "",
@@ -93,7 +91,7 @@ function mapUser(raw: Record<string, unknown>): AuthUser {
     lastName: (raw.last_name as string) ?? (raw.lastName as string) ?? "",
     username: (raw.username as string) ?? "",
     theme: ((raw.theme as string) === 'dark' ? 'dark' : 'light'),
-    avatarStyle: (VALID_AVATAR_STYLES.includes(rawStyle as AvatarStyle) ? rawStyle : 'initials') as AvatarStyle,
+    avatarStyle: rawStyle,
   }
 }
 

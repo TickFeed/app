@@ -306,8 +306,7 @@ function FocusCard({
 }) {
   const [imgError, setImgError] = useState(false)
   const isNse = article.source.name.toLowerCase().includes("nse")
-  const defaultImg = isNse ? "/default-nse.svg" : "/default-news.svg"
-  const imgSrc = (article.imageUrl && !imgError) ? article.imageUrl : defaultImg
+  const imgSrc = (article.imageUrl && !imgError) ? article.imageUrl : (isNse ? "/default-nse.jpg" : "/default-news.svg")
 
   return (
     <div className="h-full flex flex-col bg-card border border-border/30">

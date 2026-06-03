@@ -238,13 +238,14 @@ export function ArticleDetailScreen({ token, article, onBack, initialTab }: Arti
           </h2>
           <div className="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-muted self-start">
             <img
-              src={article.imageUrl || (article.source.name.toLowerCase().includes("nse") ? "/default-nse.svg" : "/default-news.svg")}
+              src={article.imageUrl || (article.source.name.toLowerCase().includes("nse") ? "/default-nse.jpg" : "/default-news.svg")}
               alt=""
               className="w-full h-full object-cover"
               onError={(e) => {
                 const img = e.target as HTMLImageElement
-                const fallback = article.source.name.toLowerCase().includes("nse") ? "/default-nse.svg" : "/default-news.svg"
-                if (img.src !== window.location.origin + fallback) img.src = fallback
+                const isNse = article.source.name.toLowerCase().includes("nse")
+                const fallback = isNse ? "/default-nse.jpg" : "/default-news.svg"
+                if (!img.src.endsWith(fallback)) img.src = fallback
               }}
             />
           </div>

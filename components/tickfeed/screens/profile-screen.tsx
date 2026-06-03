@@ -22,6 +22,7 @@ import {
 } from "@/lib/api"
 import type { NewsArticle } from "@/app/page"
 import { HelpSupportScreen } from "./help-support-screen"
+import { CommentsSheet, PollDisplay } from "./community-screen"
 
 // ── Alpha Score ───────────────────────────────────────────────────────────────
 function calcAlphaScore(posts: number, likes: number, followers: number) {
@@ -126,6 +127,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
   const [showRankings, setShowRankings] = useState(false)
   const [userPosts, setUserPosts] = useState<CommunityPost[]>([])
   const [userPostsLoading, setUserPostsLoading] = useState(false)
+  const [selectedProfilePost, setSelectedProfilePost] = useState<CommunityPost | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -614,7 +616,11 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                     </div>
                   ) : (
                     userPosts.map((post) => (
-                      <div key={post.id} className="border-b border-border/50 px-4 py-3">
+                      <div
+                        key={post.id}
+                        className="border-b border-border/50 px-4 py-3 cursor-pointer active:bg-muted/30 transition-colors"
+                        onClick={() => setSelectedProfilePost(post)}
+                      >
                         <div className="flex items-center gap-2 mb-1.5">
                           {post.symbol && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
@@ -626,6 +632,9 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.content}</p>
                         {post.image_url && (
                           <img src={post.image_url} alt="" className="mt-2 rounded-lg w-full object-cover max-h-52" />
+                        )}
+                        {post.poll_options && post.poll_options.length > 0 && (
+                          <PollDisplay post={post} token={token} />
                         )}
                         <div className="flex gap-4 mt-2.5">
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -643,6 +652,22 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
             )
           })()}
         </div>
+      )}
+
+      {/* Comments sheet for profile post tap */}
+      {selectedProfilePost && (
+        <CommentsSheet
+          post={selectedProfilePost}
+          token={token}
+          myUserId={null}
+          onUserClick={handleUserClick}
+          onClose={(finalCount) => {
+            setUserPosts((prev) =>
+              prev.map((p) => p.id === selectedProfilePost.id ? { ...p, comments_count: finalCount } : p)
+            )
+            setSelectedProfilePost(null)
+          }}
+        />
       )}
 
       {/* Rankings sheet */}

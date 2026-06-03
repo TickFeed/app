@@ -530,6 +530,7 @@ export default function TickFeedApp() {
             token={token}
             initialPostId={initialCommunityPostId}
             onUserClick={async (userId) => {
+              if (authSession && String(userId) === authSession.user.id) return
               setProfileInitialUserId(userId)
               setActiveTab("profile")
               setCurrentScreen("profile")

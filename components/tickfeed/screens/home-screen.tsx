@@ -43,7 +43,8 @@ const TABS = [
 
 // Module-level cache — survives component unmount/remount on tab switches
 // Bump _CACHE_VER whenever the feed response shape changes to auto-bust stale entries
-const _CACHE_VER = 3
+const _CACHE_VER = 4
+let _persistedTab = 0  // remembers active tab across remounts (e.g. article → back)
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
@@ -59,7 +60,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     timestamp: formatRelativeTime(item.published ?? item.created_at),
     headline: item.title,
     tags: [],
-    aiSummaryAvailable: item.priority === "HIGH",
+    aiSummaryAvailable: !!item.summary,
     commentsCount: item.comments_count ?? 0,
     imageUrl: item.image_url ?? "",
     content: item.summary ?? undefined,
@@ -68,7 +69,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
 }
 
 export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
-  const [activeTab,       setActiveTab]       = useState(0)
+  const [activeTab,       setActiveTab]       = useState(_persistedTab)
   const [focusMode,       setFocusMode]       = useState(false)
   const [news,            setNews]            = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
   const [digest,          setDigest]          = useState<MarketDigestResponse | null>(_digestCache.data)
@@ -111,15 +112,20 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
     fetchFocusPage(focusPage + 1)
   }, [focusLoadingMore, focusHasMore, focusPage, fetchFocusPage])
 
+  const changeTab = (tab: number) => {
+    _persistedTab = tab
+    setActiveTab(tab)
+  }
+
   const enterFocusMode = () => {
-    setActiveTab(2)
+    changeTab(2)
     setFocusMode(true)
     if (focusArticles.length === 0) fetchFocusPage(1)
   }
 
   const exitFocusMode = () => {
     setFocusMode(false)
-    setActiveTab(0)
+    changeTab(0)
   }
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
@@ -138,8 +144,9 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
     setActiveTab((prev) => {
       const next = prev + (dx < 0 ? 1 : -1)
       if (next < 0 || next > 2) return prev
-      if (next === 2) { setFocusMode(true); return 2 }
+      if (next === 2) { setFocusMode(true); _persistedTab = 2; return 2 }
       setFocusMode(false)
+      _persistedTab = next
       return next
     })
   }, [])
@@ -284,7 +291,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
         {TABS.map((t, i) => (
           <button
             key={t.tab}
-            onClick={() => "focus" in t && t.focus ? enterFocusMode() : setActiveTab(i)}
+            onClick={() => "focus" in t && t.focus ? enterFocusMode() : changeTab(i)}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === i && "focus" in t && t.focus
                 ? "bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-md shadow-emerald-500/30"

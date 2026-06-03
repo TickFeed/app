@@ -47,20 +47,15 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             onClick={() => onTabChange("ai")}
             className={`relative flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-all active:scale-95 ${
               activeTab === "ai"
-                ? "bg-gradient-to-br from-primary to-emerald-400 shadow-primary/50 scale-105"
-                : "bg-gradient-to-br from-primary/90 to-emerald-500 shadow-primary/30 hover:scale-105"
+                ? "bg-primary shadow-primary/40 scale-105"
+                : "bg-primary/85 shadow-primary/20 hover:scale-105"
             }`}
           >
-            <Sparkles className="h-6 w-6 text-white drop-shadow" />
+            <Sparkles className="h-6 w-6 text-white" />
             {activeTab === "ai" && (
-              <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 border-2 border-card animate-pulse" />
+              <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-white/80 border-2 border-primary animate-pulse" />
             )}
           </button>
-          <span className={`mt-1 text-[10px] font-semibold tracking-wide ${
-            activeTab === "ai" ? "text-primary" : "text-muted-foreground"
-          }`}>
-            AI
-          </span>
         </div>
 
         {RIGHT_TABS.map((tab) => {

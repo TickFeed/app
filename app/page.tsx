@@ -158,7 +158,7 @@ export default function TickFeedApp() {
         timestamp: detail.published ?? detail.created_at,
         headline: detail.title,
         tags: [],
-        aiSummaryAvailable: detail.priority === "HIGH",
+        aiSummaryAvailable: !!detail.summary,
         commentsCount: 0,
         imageUrl: detail.image_url ?? "",
       }

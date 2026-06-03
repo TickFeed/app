@@ -43,7 +43,7 @@ const TABS = [
 
 // Module-level cache — survives component unmount/remount on tab switches
 // Bump _CACHE_VER whenever the feed response shape changes to auto-bust stale entries
-const _CACHE_VER = 3
+const _CACHE_VER = 4
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
@@ -59,7 +59,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     timestamp: formatRelativeTime(item.published ?? item.created_at),
     headline: item.title,
     tags: [],
-    aiSummaryAvailable: item.priority === "HIGH",
+    aiSummaryAvailable: !!item.summary,
     commentsCount: item.comments_count ?? 0,
     imageUrl: item.image_url ?? "",
     content: item.summary ?? undefined,

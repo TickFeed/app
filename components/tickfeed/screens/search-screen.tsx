@@ -27,7 +27,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
     timestamp: formatRelativeTime(item.published ?? item.created_at),
     headline: item.title,
     tags: [],
-    aiSummaryAvailable: item.priority === "HIGH",
+    aiSummaryAvailable: !!item.summary,
     commentsCount: (item as FeedItem & { comments_count?: number | null }).comments_count ?? 0,
     imageUrl: item.image_url ?? "",
     content: item.summary ?? undefined,

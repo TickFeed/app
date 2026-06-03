@@ -51,9 +51,6 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           }`}>
             <Sparkles className={`h-5 w-5 ${activeTab === "ai" ? "text-white" : "text-primary"}`} />
           </span>
-          <span className={`text-[10px] font-semibold tracking-wide ${activeTab === "ai" ? "text-primary" : "text-muted-foreground"}`}>
-            Tickr
-          </span>
         </button>
 
         {RIGHT_TABS.map((tab) => {

@@ -42,21 +42,19 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         })}
 
         {/* Centre AI button */}
-        <div className="flex flex-1 flex-col items-center -mt-5 px-2">
-          <button
-            onClick={() => onTabChange("ai")}
-            className={`relative flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-all active:scale-95 ${
-              activeTab === "ai"
-                ? "bg-primary shadow-primary/40 scale-105"
-                : "bg-primary/85 shadow-primary/20 hover:scale-105"
-            }`}
-          >
-            <Sparkles className="h-6 w-6 text-white" />
-            {activeTab === "ai" && (
-              <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-white/80 border-2 border-primary animate-pulse" />
-            )}
-          </button>
-        </div>
+        <button
+          onClick={() => onTabChange("ai")}
+          className="flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors"
+        >
+          <span className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+            activeTab === "ai" ? "bg-primary" : "bg-primary/15"
+          }`}>
+            <Sparkles className={`h-4 w-4 ${activeTab === "ai" ? "text-white" : "text-primary"}`} />
+          </span>
+          <span className={`text-[10px] font-medium ${activeTab === "ai" ? "text-primary" : "text-muted-foreground"}`}>
+            AI
+          </span>
+        </button>
 
         {RIGHT_TABS.map((tab) => {
           const Icon = tab.icon

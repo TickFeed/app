@@ -239,7 +239,7 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
                       timestamp: formatRelativeTime(news.created_at),
                       headline: news.title,
                       tags: [],
-                      aiSummaryAvailable: !!news.summary,
+                      aiSummaryAvailable: news.priority === "HIGH",
                       commentsCount: 0,
                       imageUrl: "",
                     })}

@@ -1350,6 +1350,7 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
   const [profileLoading,     setProfileLoading]     = useState(false)
   const [profileUserPosts,   setProfileUserPosts]   = useState<CommunityPost[]>([])
   const [profilePostsLoading,setProfilePostsLoading]= useState(false)
+  const [profileSelectedPost, setProfileSelectedPost] = useState<CommunityPost | null>(null)
 
   const searchRef  = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1925,7 +1926,11 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                     </div>
                   ) : (
                     profileUserPosts.map((post) => (
-                      <div key={post.id} className="border-b border-border/50 px-4 py-3 space-y-1.5">
+                      <div
+                        key={post.id}
+                        className="border-b border-border/50 px-4 py-3 space-y-1.5 cursor-pointer active:bg-muted/30 transition-colors"
+                        onClick={() => setProfileSelectedPost(post)}
+                      >
                         <div className="flex items-center gap-2">
                           {post.symbol && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
@@ -1937,6 +1942,9 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                         <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{post.content}</p>
                         {post.image_url && (
                           <img src={post.image_url} alt="" className="mt-2 rounded-xl w-full object-cover max-h-48" />
+                        )}
+                        {post.poll_options && post.poll_options.length > 0 && (
+                          <PollDisplay post={post} token={token} />
                         )}
                         <div className="flex items-center gap-4 pt-1">
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -1954,6 +1962,23 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
             )
           })() : null}
         </div>
+      )}
+
+      {/* ── Comments sheet for profile overlay posts ── */}
+      {profileSelectedPost && (
+        <CommentsSheet
+          post={profileSelectedPost}
+          token={token}
+          myUserId={myUserId}
+          initialTickrPending={/@tickr\b/i.test(profileSelectedPost.content) && profileSelectedPost.comments_count === 0}
+          onUserClick={handleUserClick}
+          onClose={(finalCount) => {
+            setProfileUserPosts((prev) =>
+              prev.map((p) => p.id === profileSelectedPost.id ? { ...p, comments_count: finalCount } : p)
+            )
+            setProfileSelectedPost(null)
+          }}
+        />
       )}
 
       {/* ── Comments sheet ── */}

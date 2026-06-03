@@ -158,7 +158,7 @@ export default function TickFeedApp() {
         timestamp: detail.published ?? detail.created_at,
         headline: detail.title,
         tags: [],
-        aiSummaryAvailable: !!detail.summary,
+        aiSummaryAvailable: detail.priority === "HIGH",
         commentsCount: 0,
         imageUrl: detail.image_url ?? "",
       }
@@ -528,6 +528,7 @@ export default function TickFeedApp() {
             token={token}
             initialPostId={initialCommunityPostId}
             onUserClick={async (userId) => {
+              if (authSession && String(userId) === authSession.user.id) return
               setProfileInitialUserId(userId)
               setActiveTab("profile")
               setCurrentScreen("profile")

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react"
 
-const PULL_THRESHOLD = 110  // raw px the user must drag to trigger refresh
+const PULL_THRESHOLD = 160  // raw px the user must drag to trigger refresh
 const MAX_VISUAL     = 48   // max px of the indicator bar height
 const RESISTANCE     = 0.5  // pull feels heavier than 1:1
+const MIN_VERTICAL_RATIO = 2.0  // vertical must be 2× horizontal to count as a pull
 
 export type PullState = "idle" | "pulling" | "refreshing"
 
@@ -22,6 +23,7 @@ export function usePullToRefresh(
 
   // Refs so event handlers always see current values without stale closures
   const startYRef       = useRef(0)
+  const startXRef       = useRef(0)
   const isPullingRef    = useRef(false)
   const isRefreshingRef = useRef(false)
   const rawDeltaRef     = useRef(0)
@@ -35,6 +37,7 @@ export function usePullToRefresh(
     const onTouchStart = (e: TouchEvent) => {
       if (el.scrollTop === 0 && !isRefreshingRef.current) {
         startYRef.current = e.touches[0].clientY
+        startXRef.current = e.touches[0].clientX
         isPullingRef.current = true
         rawDeltaRef.current = 0
       }
@@ -42,7 +45,17 @@ export function usePullToRefresh(
 
     const onTouchMove = (e: TouchEvent) => {
       if (!isPullingRef.current) return
-      const delta = e.touches[0].clientY - startYRef.current
+      const deltaY = e.touches[0].clientY - startYRef.current
+      const deltaX = Math.abs(e.touches[0].clientX - startXRef.current)
+      // Cancel if horizontal movement dominates — it's a left/right swipe
+      if (deltaX * MIN_VERTICAL_RATIO > deltaY) {
+        isPullingRef.current = false
+        rawDeltaRef.current = 0
+        setVisualDistance(0)
+        setPullState("idle")
+        return
+      }
+      const delta = deltaY
       if (delta > 0 && el.scrollTop === 0) {
         e.preventDefault()
         rawDeltaRef.current = delta

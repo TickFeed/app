@@ -11,7 +11,7 @@ const config: CapacitorConfig = {
     },
   },
   server: {
-    url: 'https://tickfeed.in',
+    url: 'https://www.tickfeed.in',
     cleartext: false,
   },
   plugins: {

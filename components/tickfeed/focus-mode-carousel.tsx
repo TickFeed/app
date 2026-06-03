@@ -308,6 +308,9 @@ function FocusCard({
   const isNse = article.source.name.toLowerCase().includes("nse")
   const imgSrc = (article.imageUrl && !imgError) ? article.imageUrl : (isNse ? "/default-nse.jpg" : "/default-news.svg")
 
+  // Reset error state when article changes so a fallback from one card doesn't bleed into the next
+  useEffect(() => { setImgError(false) }, [article.id])
+
   return (
     <div className="h-full flex flex-col bg-card border border-border/30">
 

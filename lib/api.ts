@@ -549,6 +549,18 @@ export async function getStockChatHistory(token: string, symbol: string): Promis
   return res.messages ?? []
 }
 
+export async function getGlobalAIChatHistory(token: string): Promise<ChatHistoryMessage[]> {
+  const res = await apiGet<{ messages: ChatHistoryMessage[] }>('/api/ai/chat/history', token)
+  return res.messages ?? []
+}
+
+export async function clearGlobalAIChatHistory(token: string): Promise<void> {
+  await fetch(`${API_BASE}/api/ai/chat/history`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
 export async function searchUsers(token: string, q: string): Promise<UserSearchResult[]> {
   const res = await apiGet<{ users: UserSearchResult[] }>(`/api/users/search?q=${encodeURIComponent(q)}`, token)
   return res.users ?? []

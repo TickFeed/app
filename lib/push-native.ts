@@ -82,6 +82,8 @@ export function useNativePush(
                 title: notification.title ?? "TickFeed",
                 body: notification.body ?? "",
                 channelId: "tickfeed_default",
+                smallIcon: "ic_stat_notification",
+                iconColor: "#22c55e",
                 extra: notification.data ?? {},
               }],
             })

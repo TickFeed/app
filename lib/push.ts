@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import { getVapidPublicKey, subscribePush } from "./api"
+import { isNative } from "./native"
 
 function urlBase64ToUint8Array(base64: string): Uint8Array {
   const padding = "=".repeat((4 - (base64.length % 4)) % 4)
@@ -20,6 +21,7 @@ export function usePushNotifications(token: string | null) {
   useEffect(() => {
     if (!token || subscribedRef.current) return
     if (typeof window === "undefined") return
+    if (isNative()) return // native uses FCM via push-native.ts instead
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
 
     const alreadyDenied = localStorage.getItem("push-permission") === "denied"

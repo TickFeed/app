@@ -46,12 +46,12 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           onClick={() => onTabChange("ai")}
           className="flex flex-1 flex-col items-center pb-1 -mt-5"
         >
-          <span className={`flex h-14 w-14 items-center justify-center rounded-full shadow-md transition-all active:scale-95 ${
+          <span className={`flex h-12 w-12 items-center justify-center rounded-full shadow-md transition-all active:scale-95 ${
             activeTab === "ai"
               ? "bg-primary shadow-primary/30"
               : "bg-primary/90 shadow-primary/20"
           }`}>
-            <Sparkles className="h-6 w-6 text-white" />
+            <Sparkles className="h-5 w-5 text-white" />
           </span>
         </button>
 

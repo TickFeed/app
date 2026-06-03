@@ -91,10 +91,14 @@ export function NewsCard({
         {/* Thumbnail — always shown with fallback */}
         <div className="relative h-16 w-16 flex-shrink-0 self-center overflow-hidden rounded-lg bg-muted">
           <Image
-            src={imageUrl || (source.name.toLowerCase().includes("nse") ? "/default-nse.svg" : "/default-news.svg")}
+            src={imageUrl || (source.name.toLowerCase().includes("nse") ? "/default-nse.jpg" : "/default-news.svg")}
             alt=""
             fill
             className="object-cover"
+            onError={(e) => {
+              const isNse = source.name.toLowerCase().includes("nse")
+              ;(e.target as HTMLImageElement).src = isNse ? "/default-nse.jpg" : "/default-news.svg"
+            }}
           />
         </div>
       </div>

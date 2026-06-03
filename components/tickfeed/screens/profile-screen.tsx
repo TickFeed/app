@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronRight, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X, Heart, MessageCircle, MessageSquare } from "lucide-react"
+import { ChevronRight, Clock, HelpCircle, LogOut, Moon, Sun, Newspaper, TrendingUp, Users, Zap, X, Heart, MessageCircle, MessageSquare, Shuffle } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { useForm } from "react-hook-form"
@@ -58,7 +58,20 @@ const AVATAR_STYLES: { id: AvatarStyle; label: string }[] = [
 ]
 
 function dicebearUrl(style: string, seed: string) {
+  if (style.includes(":")) {
+    const [s, customSeed] = style.split(":", 2)
+    return `https://api.dicebear.com/9.x/${s}/svg?seed=${encodeURIComponent(customSeed)}&size=80`
+  }
   return `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(seed)}&size=80`
+}
+
+const RANDOM_STYLES = ["micah", "personas", "notionists-neutral", "lorelei-neutral", "shapes", "micah"]
+
+function generateRandomAvatars() {
+  return RANDOM_STYLES.map(style => ({
+    style,
+    seed: Math.random().toString(36).slice(2, 10),
+  }))
 }
 
 const editSchema = z.object({
@@ -104,6 +117,7 @@ export function ProfileScreen({ user, token, onSignOut, onGoToWatchlist, onArtic
   const [historyLoading, setHistoryLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [avatarStyle, setAvatarStyle] = useState<AvatarStyle>(user.avatarStyle ?? "initials")
+  const [generatedAvatars, setGeneratedAvatars] = useState<{ style: string; seed: string }[]>([])
   const [stats, setStats] = useState<UserStats | null>(null)
   const [following, setFollowing] = useState<FollowingUser[] | null>(null)
   const [myProfile, setMyProfile] = useState<PublicUserProfile | null>(null)
@@ -881,7 +895,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
             <SheetTitle className="text-lg">Edit Profile</SheetTitle>
           </SheetHeader>
 
-          {/* Avatar style picker */}
+          {/* Avatar picker */}
           <div className="mb-5 flex flex-col items-center gap-3">
             <Avatar className="h-20 w-20 border-2 border-border">
               {avatarStyle !== "initials" && user.username && (
@@ -889,31 +903,75 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
               )}
               <AvatarFallback className="bg-primary text-2xl font-bold text-primary-foreground">{initials}</AvatarFallback>
             </Avatar>
-            <p className="text-xs text-muted-foreground">Choose your avatar style</p>
-            <div className="grid grid-cols-3 gap-2 w-full">
-              {AVATAR_STYLES.map((style) => (
-                <button
-                  key={style.id}
-                  type="button"
-                  onClick={() => handleStyleSelect(style.id)}
-                  className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition-colors ${
-                    avatarStyle === style.id
-                      ? "border-primary bg-primary/10"
-                      : "border-border hover:bg-muted/40"
-                  }`}
-                >
-                  <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
-                    {style.id === "initials" ? (
-                      <div className="flex h-full w-full items-center justify-center bg-primary text-xs font-bold text-primary-foreground">
-                        {initials}
-                      </div>
-                    ) : (
-                      <img src={dicebearUrl(style.id, user.username)} alt={style.label} className="h-full w-full object-cover" />
-                    )}
-                  </div>
-                  <span className={`text-xs ${avatarStyle === style.id ? "font-medium text-primary" : "text-muted-foreground"}`}>{style.label}</span>
-                </button>
-              ))}
+
+            {/* Avatar grid — presets or random */}
+            <div className="w-full">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground">
+                  {generatedAvatars.length ? "Random avatars" : "Style presets"}
+                </p>
+                <div className="flex items-center gap-2">
+                  {generatedAvatars.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setGeneratedAvatars([])}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Presets
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setGeneratedAvatars(generateRandomAvatars())}
+                    className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/70 transition-colors"
+                  >
+                    <Shuffle className="h-3 w-3" />
+                    {generatedAvatars.length ? "Regenerate" : "Generate"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {generatedAvatars.length > 0
+                  ? generatedAvatars.map((av, i) => {
+                      const compound = `${av.style}:${av.seed}`
+                      const isSelected = avatarStyle === compound
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => handleStyleSelect(compound)}
+                          className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition-colors ${
+                            isSelected ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
+                          }`}
+                        >
+                          <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
+                            <img src={dicebearUrl(av.style, av.seed)} alt="avatar" className="h-full w-full object-cover" />
+                          </div>
+                        </button>
+                      )
+                    })
+                  : AVATAR_STYLES.map((style) => (
+                      <button
+                        key={style.id}
+                        type="button"
+                        onClick={() => handleStyleSelect(style.id)}
+                        className={`flex flex-col items-center gap-1.5 rounded-xl border p-2 transition-colors ${
+                          avatarStyle === style.id ? "border-primary bg-primary/10" : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <div className="h-10 w-10 overflow-hidden rounded-full border border-border bg-muted">
+                          {style.id === "initials" ? (
+                            <div className="flex h-full w-full items-center justify-center bg-primary text-xs font-bold text-primary-foreground">{initials}</div>
+                          ) : (
+                            <img src={dicebearUrl(style.id, user.username)} alt={style.label} className="h-full w-full object-cover" />
+                          )}
+                        </div>
+                        <span className={`text-xs ${avatarStyle === style.id ? "font-medium text-primary" : "text-muted-foreground"}`}>{style.label}</span>
+                      </button>
+                    ))
+                }
+              </div>
             </div>
           </div>
 

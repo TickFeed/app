@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
-import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X } from "lucide-react"
+import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X, Calendar, ChevronRight } from "lucide-react"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { MarketDigest } from "../market-digest"
 import { NewsCard } from "../news-card"
@@ -13,6 +13,7 @@ import {
   getNewsFeed,
   getMarketDigest,
   getWatchlist,
+  getWatchlistEvents,
   formatRelativeTime,
   sourceToIcon,
   getUnreadCount,
@@ -20,6 +21,7 @@ import {
   type FeedItem,
   type MarketDigestResponse,
   type WatchlistItem,
+  type StockEvent,
 } from "@/lib/api"
 import { usePolling } from "@/hooks/use-polling"
 
@@ -81,6 +83,8 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   const [stockFilter,     setStockFilter]     = useState<string | null>(null)
   const [showStockFilterSheet, setShowStockFilterSheet] = useState(false)
   const [watchlist,       setWatchlist]       = useState<WatchlistItem[]>([])
+  const [stockEvents,     setStockEvents]     = useState<StockEvent[]>([])
+  const [selectedEvent,   setSelectedEvent]   = useState<StockEvent | null>(null)
   const scrollRef   = useRef<HTMLDivElement>(null)
   const swipeStartX = useRef<number | null>(null)
   const swipeStartY = useRef<number | null>(null)
@@ -200,8 +204,9 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   useEffect(() => {
     fetchFeed(activeTab)
     if (activeTab === 0) fetchDigest()
-    if (activeTab === 1 && watchlist.length === 0) {
-      getWatchlist(token).then(setWatchlist).catch(() => {})
+    if (activeTab === 1) {
+      if (watchlist.length === 0) getWatchlist(token).then(setWatchlist).catch(() => {})
+      getWatchlistEvents(token).then(setStockEvents).catch(() => {})
     }
     setStockFilter(null)
     setShowStockFilterSheet(false)
@@ -304,6 +309,38 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
               dateLabel={digestDate}
               indexDigests={indexDigests}
             />
+          </div>
+        )}
+
+        {/* Upcoming Events strip — My Stocks tab only */}
+        {activeTab === 1 && stockEvents.length > 0 && (
+          <div className="px-4 py-3 border-b border-border/50">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Calendar className="h-3 w-3" /> Upcoming Events
+            </p>
+            <div className="flex gap-2.5 overflow-x-auto scrollbar-hide" data-no-swipe>
+              {stockEvents.map((ev) => {
+                const evDate = new Date(ev.event_date + "T00:00:00")
+                const todayMs = new Date().setHours(0, 0, 0, 0)
+                const diffDays = Math.round((evDate.getTime() - todayMs) / 86400000)
+                const dateLabel = diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow" : evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                const label = ev.event_type.replace("_", " ")
+                return (
+                  <button
+                    key={ev.id}
+                    onClick={() => setSelectedEvent(ev)}
+                    className="shrink-0 flex flex-col gap-1 rounded-2xl border border-border bg-muted/60 px-3.5 py-2.5 text-left"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] font-black text-foreground">{ev.symbol}</span>
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                    <span className="text-xs font-semibold capitalize text-primary">{label}</span>
+                    <span className="text-[10px] text-muted-foreground">{dateLabel}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -436,6 +473,55 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           )}
         </div>
       </div>
+
+      {/* Event detail bottom sheet */}
+      {selectedEvent && createPortal((
+        <>
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setSelectedEvent(null)} />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-background"
+            style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)", maxHeight: "75dvh" }}
+          >
+            <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+              <div>
+                <span className="font-bold text-foreground">{selectedEvent.symbol}</span>
+                <span className="ml-2 text-sm text-muted-foreground capitalize">{selectedEvent.event_type.replace("_", " ").toLowerCase()}</span>
+              </div>
+              <button onClick={() => setSelectedEvent(null)} className="rounded-full p-1.5 hover:bg-muted transition-colors">
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-4 py-4 space-y-4" style={{ maxHeight: "calc(75dvh - 65px)" }}>
+              {/* Key dates */}
+              <div className="flex gap-3">
+                <div className="flex-1 rounded-xl bg-muted/50 border border-border/50 p-3 text-center">
+                  <p className="text-xs text-muted-foreground mb-0.5">Event Date</p>
+                  <p className="text-sm font-bold text-foreground">
+                    {new Date(selectedEvent.event_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                {selectedEvent.record_date && (
+                  <div className="flex-1 rounded-xl bg-muted/50 border border-border/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-0.5">Record Date</p>
+                    <p className="text-sm font-bold text-foreground">
+                      {new Date(selectedEvent.record_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  </div>
+                )}
+              </div>
+              {/* AI summary */}
+              {selectedEvent.ai_summary ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">What this means</p>
+                  <p className="text-sm text-foreground leading-relaxed">{selectedEvent.ai_summary}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">AI summary coming soon</p>
+              )}
+            </div>
+          </div>
+        </>
+      ), document.body)}
 
       {/* Stock filter bottom sheet — rendered via portal to escape overflow:hidden containers */}
       {showStockFilterSheet && createPortal((() => {

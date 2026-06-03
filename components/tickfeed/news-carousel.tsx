@@ -268,10 +268,14 @@ function ArticleCard({
       {/* Image area — 44 % of card height */}
       <div className="relative overflow-hidden" style={{ flex: "0 0 44%" }}>
         <img
-          src={article.imageUrl || (article.source.name.toLowerCase().includes("nse") ? "/default-nse.svg" : "/default-news.svg")}
+          src={article.imageUrl || (article.source.name.toLowerCase().includes("nse") ? "/default-nse.jpg" : "/default-news.svg")}
           alt={article.headline}
           className="w-full h-full object-cover"
           draggable={false}
+          onError={(e) => {
+            const isNse = article.source.name.toLowerCase().includes("nse")
+            ;(e.target as HTMLImageElement).src = isNse ? "/default-nse.jpg" : "/default-news.svg"
+          }}
         />
 
         {/* Bottom gradient so source pill is readable over any image */}

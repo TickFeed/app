@@ -41,18 +41,18 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           )
         })}
 
-        {/* Centre AI button */}
+        {/* Centre Tickr button — intentionally larger than sibling tabs */}
         <button
           onClick={() => onTabChange("ai")}
           className="flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors"
         >
-          <span className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+          <span className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
             activeTab === "ai" ? "bg-primary" : "bg-primary/15"
           }`}>
-            <Sparkles className={`h-4 w-4 ${activeTab === "ai" ? "text-white" : "text-primary"}`} />
+            <Sparkles className={`h-5 w-5 ${activeTab === "ai" ? "text-white" : "text-primary"}`} />
           </span>
-          <span className={`text-[10px] font-medium ${activeTab === "ai" ? "text-primary" : "text-muted-foreground"}`}>
-            AI
+          <span className={`text-[10px] font-semibold tracking-wide ${activeTab === "ai" ? "text-primary" : "text-muted-foreground"}`}>
+            Tickr
           </span>
         </button>
 

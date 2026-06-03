@@ -135,13 +135,14 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
   }, [token])
 
   const handleUserClick = useCallback(async (userId: number) => {
+    if (String(userId) === user.id) return
     setUserProfileLoading(true)
     try {
       const profile = await getUserPublicProfile(token, userId)
       setSelectedUser(profile)
     } catch { /* ignore */ }
     finally { setUserProfileLoading(false) }
-  }, [token])
+  }, [token, user.id])
 
   const handleFollowToggle = useCallback(async (profile: PublicUserProfile) => {
     const wasFollowing = profile.is_following

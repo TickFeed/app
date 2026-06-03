@@ -1526,13 +1526,14 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
 
   // ── User profile click ───────────────────────────────────────────────
   const handleUserClick = useCallback(async (userId: number) => {
+    if (userId === myUserId) return
     setProfileLoading(true)
     try {
       const p = await getUserPublicProfile(token, userId)
       setProfileUser(p)
     } catch {}
     finally { setProfileLoading(false) }
-  }, [token])
+  }, [token, myUserId])
 
   const handleProfileFollow = async () => {
     if (!profileUser) return

@@ -1,77 +1,34 @@
 "use client"
 
-import { Home, LineChart, Users, User, Sparkles } from "lucide-react"
+import { Home, LineChart, Users, User } from "lucide-react"
 
 interface BottomNavProps {
   activeTab: string
   onTabChange: (tab: string) => void
 }
 
-const LEFT_TABS = [
-  { id: "home",      label: "Home",      icon: Home },
-  { id: "watchlist", label: "Watchlist", icon: LineChart },
-]
-
-const RIGHT_TABS = [
-  { id: "community", label: "Community", icon: Users },
-  { id: "profile",   label: "Profile",   icon: User },
-]
-
 export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
+  const tabs = [
+    { id: "home",      label: "Home",      icon: Home },
+    { id: "watchlist", label: "Watchlist", icon: LineChart },
+    { id: "community", label: "Community", icon: Users },
+    { id: "profile",   label: "Profile",   icon: User },
+  ]
+
   return (
     <nav className="bg-card/95 backdrop-blur-xl border-t border-border sticky bottom-0 z-50">
-      <div
-        className="flex items-center justify-around px-2 pt-2"
-        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}
-      >
-        {LEFT_TABS.map((tab) => {
+      <div className="flex items-center justify-around px-4 pt-3" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}>
+        {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
           return (
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-5 w-5" />
-              <span className="text-[10px] font-medium">{tab.label}</span>
-            </button>
-          )
-        })}
-
-        {/* Centre AI button */}
-        <div className="flex flex-1 flex-col items-center -mt-5 px-2">
-          <button
-            onClick={() => onTabChange("ai")}
-            className={`relative flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-all active:scale-95 ${
-              activeTab === "ai"
-                ? "bg-gradient-to-br from-primary to-emerald-400 shadow-primary/50 scale-105"
-                : "bg-gradient-to-br from-primary/90 to-emerald-500 shadow-primary/30 hover:scale-105"
-            }`}
-          >
-            <Sparkles className="h-6 w-6 text-white drop-shadow" />
-            {activeTab === "ai" && (
-              <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 border-2 border-card animate-pulse" />
-            )}
-          </button>
-          <span className={`mt-1 text-[10px] font-semibold tracking-wide ${
-            activeTab === "ai" ? "text-primary" : "text-muted-foreground"
-          }`}>
-            AI
-          </span>
-        </div>
-
-        {RIGHT_TABS.map((tab) => {
-          const Icon = tab.icon
-          const isActive = activeTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 transition-colors ${
+                isActive
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Icon className="h-5 w-5" />

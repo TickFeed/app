@@ -2,13 +2,13 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Sparkles, Send } from "lucide-react"
-import { API_BASE, getStockChatHistory, getChatHistory, getGlobalAIChatHistory, type ChatHistoryMessage } from "@/lib/api"
+import { API_BASE, getStockChatHistory, getChatHistory, type ChatHistoryMessage } from "@/lib/api"
 import { AiMarkdown } from "./ai-markdown"
 
 interface AiChatTabProps {
   token: string
-  mode: "article" | "stock" | "global"
-  contextId?: number | string  // newsId for article, symbol for stock; unused for global
+  mode: "article" | "stock"
+  contextId: number | string  // newsId for article, symbol for stock
   isActive: boolean
   welcomeMessage?: string
   suggestedQuestions?: Array<{ q: string; icon?: string }>
@@ -65,9 +65,7 @@ export function AiChatTab({ token, mode, contextId, isActive, welcomeMessage, su
     setHistoryLoading(true)
     const fetchHistory = mode === "article"
       ? getChatHistory(token, contextId as number)
-      : mode === "stock"
-      ? getStockChatHistory(token, contextId as string)
-      : getGlobalAIChatHistory(token)
+      : getStockChatHistory(token, contextId as string)
     fetchHistory
       .then((history: ChatHistoryMessage[]) => {
         if (history.length > 0) {

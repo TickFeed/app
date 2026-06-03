@@ -489,7 +489,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
       {/* User profile sheet */}
       {(selectedUser || userProfileLoading) && (
         <div className="fixed inset-0 z-[300] flex flex-col bg-background">
-          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background safe-area-pt">
             <button
               onClick={() => setSelectedUser(null)}
               className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"

@@ -1817,7 +1817,7 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
       {(profileUser || profileLoading) && (
         <div className="fixed inset-0 z-[300] flex flex-col bg-background">
           {/* Header */}
-          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
+          <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background safe-area-pt">
             <button
               onClick={() => setProfileUser(null)}
               className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"

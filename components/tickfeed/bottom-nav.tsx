@@ -21,7 +21,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <nav className="bg-card/95 backdrop-blur-xl border-t border-border sticky bottom-0 z-50">
       <div
-        className="flex items-center justify-around px-2 pt-2"
+        className="flex items-end justify-around px-2"
         style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom, 0px))' }}
       >
         {LEFT_TABS.map((tab) => {
@@ -31,7 +31,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
+              className={`flex flex-1 flex-col items-center gap-0.5 px-2 pt-2 pb-1 transition-colors ${
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -41,15 +41,17 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           )
         })}
 
-        {/* Centre Tickr button — intentionally larger than sibling tabs */}
+        {/* Centre AI button — floats above nav */}
         <button
           onClick={() => onTabChange("ai")}
-          className="flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors"
+          className="flex flex-1 flex-col items-center pb-1 -mt-5"
         >
-          <span className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
-            activeTab === "ai" ? "bg-primary" : "bg-primary/15"
+          <span className={`flex h-14 w-14 items-center justify-center rounded-full shadow-md transition-all active:scale-95 ${
+            activeTab === "ai"
+              ? "bg-primary shadow-primary/30"
+              : "bg-primary/90 shadow-primary/20"
           }`}>
-            <Sparkles className={`h-5 w-5 ${activeTab === "ai" ? "text-white" : "text-primary"}`} />
+            <Sparkles className="h-6 w-6 text-white" />
           </span>
         </button>
 
@@ -60,7 +62,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex flex-1 flex-col items-center gap-0.5 px-2 py-1 transition-colors ${
+              className={`flex flex-1 flex-col items-center gap-0.5 px-2 pt-2 pb-1 transition-colors ${
                 isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
               }`}
             >

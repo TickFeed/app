@@ -763,6 +763,24 @@ function ComposeSheet({ token, myUserId: _myUserId, onClose, onPosted }: Compose
             </div>
           )}
 
+          {/* Post type picker panel */}
+          {typePickerOpen && (
+            <div className="mt-3 border-t border-border/50 pt-3">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">Post type</p>
+              <div className="flex flex-wrap gap-2">
+                {(Object.entries(POST_TYPE_META) as [PostType, { label: string; bg: string; text: string }][]).map(([type, { label, bg, text }]) => (
+                  <button
+                    key={type}
+                    onClick={() => { setPostType(type); setTypePickerOpen(false) }}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold transition-all ${bg} ${text} ${postType === type ? "ring-2 ring-offset-1 ring-current" : "opacity-70 hover:opacity-100"}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Poll options editor */}
           {pollOpen && (
             <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
@@ -827,30 +845,12 @@ function ComposeSheet({ token, myUserId: _myUserId, onClose, onPosted }: Compose
           </button>
 
           {/* Post type picker */}
-          <div className="relative">
-            <button
-              onClick={() => setTypePickerOpen((p) => !p)}
-              className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors ${POST_TYPE_META[postType].bg} ${POST_TYPE_META[postType].text}`}
-            >
-              {POST_TYPE_META[postType].label}
-            </button>
-            {typePickerOpen && (
-              <>
-                <div className="fixed inset-0 z-[300]" onClick={() => setTypePickerOpen(false)} />
-                <div className="absolute bottom-full left-0 mb-1 z-[301] bg-background border border-border rounded-xl shadow-lg overflow-hidden w-40">
-                  {(Object.entries(POST_TYPE_META) as [PostType, { label: string; bg: string; text: string }][]).map(([type, { label, bg, text }]) => (
-                    <button
-                      key={type}
-                      onClick={() => { setPostType(type); setTypePickerOpen(false) }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted ${postType === type ? "bg-muted/60" : ""}`}
-                    >
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${bg} ${text}`}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <button
+            onClick={() => setTypePickerOpen((p) => !p)}
+            className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors ${POST_TYPE_META[postType].bg} ${POST_TYPE_META[postType].text}`}
+          >
+            {POST_TYPE_META[postType].label}
+          </button>
 
           <span className={`ml-auto mr-1 text-xs font-medium tabular-nums ${
             remaining < 0 ? "text-destructive font-bold" : remaining < 50 ? "text-amber-500" : "text-muted-foreground"

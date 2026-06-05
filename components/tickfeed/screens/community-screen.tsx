@@ -10,6 +10,7 @@ import {
   MoreVertical, Trash2, Flag, Users,
 } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { AlphaBadge } from "@/components/tickfeed/alpha-badge"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import {
   getCommunityPosts, createPost, likePost, unlikePost,
@@ -17,7 +18,8 @@ import {
   dicebearUrl, getUserPublicProfile, getUserPosts, getPostById,
   requestUploadUrl, uploadToBlob, votePoll, deletePost, reportPost,
   formatRelativeTime, API_BASE,
-  type CommunityPost, type PublicUserProfile, type UserSearchResult,
+  POST_TYPE_META,
+  type CommunityPost, type PublicUserProfile, type UserSearchResult, type PostType,
 } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
@@ -434,13 +436,22 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
                   className={`font-semibold text-sm text-foreground truncate ${!post.is_bot ? "cursor-pointer hover:underline" : ""}`}
                   onClick={(e) => { if (post.is_bot) return; e.stopPropagation(); onUserClick?.(post.author_id) }}
                 >{name}</span>
-                {post.is_bot && (
+                {post.is_bot ? (
                   <span className="shrink-0 bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">AI</span>
+                ) : post.author_alpha_score != null && (
+                  <AlphaBadge score={post.author_alpha_score} />
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                @{post.username ?? "user"} · {time}
-              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-[11px] text-muted-foreground">
+                  @{post.username ?? "user"} · {time}
+                </p>
+                {post.post_type && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${POST_TYPE_META[post.post_type]?.bg ?? ""} ${POST_TYPE_META[post.post_type]?.text ?? ""}`}>
+                    {POST_TYPE_META[post.post_type]?.label ?? post.post_type}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
@@ -609,6 +620,8 @@ function ComposeSheet({ token, myUserId: _myUserId, onClose, onPosted }: Compose
   const [uploadingImage, setUploadingImage] = useState(false)
   const [pollOpen, setPollOpen] = useState(false)
   const [pollOptions, setPollOptions] = useState(["", ""])
+  const [postType, setPostType] = useState<PostType>("discussion")
+  const [typePickerOpen, setTypePickerOpen] = useState(false)
   const validationTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -676,7 +689,7 @@ function ComposeSheet({ token, myUserId: _myUserId, onClose, onPosted }: Compose
         }
       }
       const opts = pollOpen ? pollOptions.map((o) => o.trim()).filter(Boolean) : undefined
-      const created = await createPost(token, trimmed, undefined, undefined, blobUrl, opts)
+      const created = await createPost(token, trimmed, undefined, undefined, blobUrl, opts, postType)
       onPosted(created)
       onClose()
     } catch {
@@ -812,6 +825,33 @@ function ComposeSheet({ token, myUserId: _myUserId, onClose, onPosted }: Compose
             <BarChart2 className="h-4 w-4" />
             Poll
           </button>
+
+          {/* Post type picker */}
+          <div className="relative">
+            <button
+              onClick={() => setTypePickerOpen((p) => !p)}
+              className={`rounded-full px-2.5 py-1.5 text-xs font-bold transition-colors ${POST_TYPE_META[postType].bg} ${POST_TYPE_META[postType].text}`}
+            >
+              {POST_TYPE_META[postType].label}
+            </button>
+            {typePickerOpen && (
+              <>
+                <div className="fixed inset-0 z-[300]" onClick={() => setTypePickerOpen(false)} />
+                <div className="absolute bottom-full left-0 mb-1 z-[301] bg-background border border-border rounded-xl shadow-lg overflow-hidden w-40">
+                  {(Object.entries(POST_TYPE_META) as [PostType, { label: string; bg: string; text: string }][]).map(([type, { label, bg, text }]) => (
+                    <button
+                      key={type}
+                      onClick={() => { setPostType(type); setTypePickerOpen(false) }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-muted ${postType === type ? "bg-muted/60" : ""}`}
+                    >
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${bg} ${text}`}>{label}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           <span className={`ml-auto mr-1 text-xs font-medium tabular-nums ${
             remaining < 0 ? "text-destructive font-bold" : remaining < 50 ? "text-amber-500" : "text-muted-foreground"
           }`}>
@@ -1710,7 +1750,10 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                       }
                     </div>
                     <div className="flex-1 text-left min-w-0">
-                      <p className="font-semibold text-sm text-foreground truncate">{name}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="font-semibold text-sm text-foreground truncate">{name}</p>
+                        <AlphaBadge score={u.posts_count * 15 + u.followers_count * 25} />
+                      </div>
                       <p className="text-xs text-muted-foreground">@{u.username}</p>
                     </div>
                     <div className="text-right text-xs text-muted-foreground shrink-0">
@@ -1852,7 +1895,10 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
                     {avatarSrc && <AvatarImage src={avatarSrc} alt={pInitials} />}
                     <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">{pInitials}</AvatarFallback>
                   </Avatar>
-                  <h3 className="text-xl font-black text-foreground">{pName}</h3>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xl font-black text-foreground">{pName}</h3>
+                    <AlphaBadge score={score} size="md" />
+                  </div>
                   <p className="text-sm text-muted-foreground mt-0.5">@{profileUser.username ?? "user"}</p>
 
                   {/* Follow button */}

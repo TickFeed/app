@@ -35,12 +35,26 @@ const THINKING_PHRASES = [
 
 function ThinkingStatus() {
   const [phraseIdx, setPhraseIdx] = useState(0)
+  const [visible, setVisible] = useState(true)
+
   useEffect(() => {
-    const t = setInterval(() => setPhraseIdx((i) => (i + 1) % THINKING_PHRASES.length), 1800)
+    const t = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setPhraseIdx((i) => (i + 1) % THINKING_PHRASES.length)
+        setVisible(true)
+      }, 400)
+    }, 2000)
     return () => clearInterval(t)
   }, [])
+
   return (
-    <p className="text-sm text-muted-foreground animate-pulse">{THINKING_PHRASES[phraseIdx]}</p>
+    <p
+      className="text-sm text-muted-foreground transition-opacity duration-400"
+      style={{ opacity: visible ? 1 : 0 }}
+    >
+      {THINKING_PHRASES[phraseIdx]}
+    </p>
   )
 }
 

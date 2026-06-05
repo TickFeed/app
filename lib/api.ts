@@ -144,6 +144,19 @@ export interface PollOption {
   votes: number
 }
 
+export type PostType = 'discussion' | 'news' | 'analysis' | 'meme' | 'question' | 'tip' | 'rant' | 'yolo'
+
+export const POST_TYPE_META: Record<PostType, { label: string; bg: string; text: string }> = {
+  discussion: { label: 'Discussion', bg: 'bg-blue-500/15',   text: 'text-blue-500' },
+  news:       { label: 'News',       bg: 'bg-orange-500/15', text: 'text-orange-500' },
+  analysis:   { label: 'Analysis',   bg: 'bg-purple-500/15', text: 'text-purple-500' },
+  meme:       { label: 'Meme',       bg: 'bg-amber-400/15',  text: 'text-amber-500' },
+  question:   { label: 'Question',   bg: 'bg-cyan-500/15',   text: 'text-cyan-500' },
+  tip:        { label: 'Tip',        bg: 'bg-green-500/15',  text: 'text-green-500' },
+  rant:       { label: 'Rant',       bg: 'bg-red-500/15',    text: 'text-red-500' },
+  yolo:       { label: 'YOLO',       bg: 'bg-pink-500/15',   text: 'text-pink-500' },
+}
+
 export interface CommunityPost {
   id: number
   content: string
@@ -165,6 +178,8 @@ export interface CommunityPost {
   is_following: boolean
   poll_options: PollOption[] | null
   my_poll_vote: number | null
+  author_alpha_score: number | null
+  post_type: PostType
 }
 
 export interface UploadUrlResponse {
@@ -443,6 +458,10 @@ export async function getWatchlistEvents(token: string, days = 30): Promise<Stoc
   return res.events ?? []
 }
 
+export async function getPortfolioAnalysis(token: string): Promise<{ analysis: string; stock_count: number }> {
+  return apiGet('/api/ai/portfolio-analysis', token)
+}
+
 export async function addToWatchlist(
   token: string,
   symbol: string,
@@ -484,6 +503,7 @@ export async function createPost(
   newsId?: number,
   imageUrl?: string,
   pollOptions?: string[],
+  postType: PostType = 'discussion',
 ): Promise<CommunityPost> {
   return apiPost('/api/community/posts', token, {
     content,
@@ -491,6 +511,7 @@ export async function createPost(
     news_id: newsId ?? null,
     image_url: imageUrl ?? null,
     poll_options: pollOptions ?? null,
+    post_type: postType,
   })
 }
 

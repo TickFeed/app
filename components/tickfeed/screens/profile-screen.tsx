@@ -23,6 +23,7 @@ import {
 import type { NewsArticle } from "@/app/page"
 import { HelpSupportScreen } from "./help-support-screen"
 import { CommentsSheet, PollDisplay } from "./community-screen"
+import { AlphaBadge, ALPHA_BADGE_TIERS, calcAlphaScore as computeAlpha } from "@/components/tickfeed/alpha-badge"
 
 // ── Alpha Score ───────────────────────────────────────────────────────────────
 function calcAlphaScore(posts: number, likes: number, followers: number) {
@@ -429,8 +430,10 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                         </div>
                       )}
                     </div>
-                    <p className="text-[11px] text-foreground font-medium truncate max-w-[52px]">{name.split(" ")[0]}</p>
-                    <p className={`text-[10px] font-semibold ${tier.color}`}>{tier.label}</p>
+                    <div className="flex items-center gap-0.5">
+                      <p className="text-[11px] text-foreground font-medium truncate max-w-[44px]">{name.split(" ")[0]}</p>
+                      <AlphaBadge score={score} />
+                    </div>
                   </button>
                 )
               })}
@@ -540,7 +543,10 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                       <div className="flex h-full w-full items-center justify-center bg-primary text-2xl font-bold text-primary-foreground">{ini}</div>
                     )}
                   </div>
-                  <h3 className="text-xl font-bold text-foreground">{name}</h3>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xl font-bold text-foreground">{name}</h3>
+                    <AlphaBadge score={score} size="md" />
+                  </div>
                   <p className="text-sm text-muted-foreground">@{u.username ?? "user"}</p>
 
                   {/* Follow button */}
@@ -734,7 +740,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                     >
                       <div className="flex items-center gap-3">
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${t.border} ${t.bg}`}>
-                          <Zap className={`h-4 w-4 ${isUnlocked ? t.color : "text-muted-foreground"}`} />
+                          <AlphaBadge score={t.min === 0 ? 0 : t.min} size="md" showAll />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">

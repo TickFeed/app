@@ -52,6 +52,10 @@ export function invalidateMyStocksCache() {
   delete _feedCache[`${_CACHE_VER}:1`]
 }
 
+export function setHomeTabToFocus() {
+  _persistedTab = 2
+}
+
 function feedItemToArticle(item: FeedItem): NewsArticle {
   return {
     id: String(item.id),

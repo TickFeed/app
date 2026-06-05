@@ -6,7 +6,7 @@ import { useNativePush } from "@/lib/push-native"
 import { updateStatusBar } from "@/lib/native"
 import { useAndroidBackButton } from "@/lib/back-button"
 import { clearAnalyticsUser, logEvent, logScreenView, setAnalyticsUser } from "@/lib/analytics"
-import { HomeScreen } from "@/components/tickfeed/screens/home-screen"
+import { HomeScreen, setHomeTabToFocus } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
 import { AddStockScreen } from "@/components/tickfeed/screens/add-stock-screen"
@@ -82,6 +82,7 @@ export default function TickFeedApp() {
   const [initialCommunityPostId, setInitialCommunityPostId] = useState<number | undefined>(undefined)
   const [profileInitialUserId, setProfileInitialUserId] = useState<number | undefined>(undefined)
   const [profileInitialUser, setProfileInitialUser] = useState<PublicUserProfile | null>(null)
+  const articleOpenedFromNotification = useRef(false)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -127,6 +128,10 @@ export default function TickFeedApp() {
   }
 
   const handleBackFromArticle = () => {
+    if (articleOpenedFromNotification.current) {
+      setHomeTabToFocus()
+      articleOpenedFromNotification.current = false
+    }
     setCurrentScreen(previousScreen)
     setPreviousScreen(preArticlePreviousScreen)
     setSelectedArticle(null)
@@ -166,7 +171,8 @@ export default function TickFeedApp() {
       }
       setSelectedArticle(article)
       setArticleInitialTab(tab as "ai-summary" | "ai-chat" | "discussions" | undefined)
-      setPreviousScreen("notifications")
+      setPreviousScreen("home")
+      articleOpenedFromNotification.current = true
       setCurrentScreen("article-detail")
     } catch {
       // If fetch fails, just go home

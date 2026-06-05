@@ -10,11 +10,11 @@ interface GlobalAIScreenProps {
 }
 
 const SUGGESTED = [
+  { q: "Give me an overall analysis of my portfolio" },
   { q: "What's moving the market today?" },
   { q: "Top Nifty 50 movers this week?" },
   { q: "Any major corporate announcements?" },
   { q: "What's happening with banking stocks?" },
-  { q: "Summarise today's market sentiment" },
 ]
 
 export function GlobalAIScreen({ token }: GlobalAIScreenProps) {

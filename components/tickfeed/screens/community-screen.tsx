@@ -247,8 +247,8 @@ const REPORT_REASONS = [
 ]
 
 function PostMenuSheet({
-  isOwn, onClose, onDelete, onReport,
-}: { isOwn: boolean; onClose: () => void; onDelete?: () => void; onReport?: (reason: string) => void }) {
+  isOwn, onClose, onDelete, onReport, label = "Post",
+}: { isOwn: boolean; onClose: () => void; onDelete?: () => void; onReport?: (reason: string) => void; label?: string }) {
   const [step, setStep] = useState<"main" | "reason" | "other">("main")
   const [otherText, setOtherText] = useState("")
   const otherRef = React.useRef<HTMLTextAreaElement>(null)
@@ -272,7 +272,7 @@ function PostMenuSheet({
                 className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <Trash2 className="h-5 w-5 shrink-0" />
-                <span className="font-semibold">Delete Post</span>
+                <span className="font-semibold">Delete {label}</span>
               </button>
             ) : (
               <button
@@ -280,7 +280,7 @@ function PostMenuSheet({
                 className="flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <Flag className="h-5 w-5 shrink-0" />
-                <span className="font-semibold">Report Post</span>
+                <span className="font-semibold">Report {label}</span>
               </button>
             )}
             <button
@@ -406,6 +406,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
       {menuOpen && (
         <PostMenuSheet
           isOwn={isMe}
+          label={post.reply_to_id ? "Comment" : "Post"}
           onClose={() => setMenuOpen(false)}
           onDelete={onDelete ? () => onDelete(post) : undefined}
           onReport={onReport ? (reason) => onReport(post, reason) : undefined}

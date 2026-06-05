@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
-import { Send, Heart, MessageSquare, Bot, AlertCircle, ChevronLeft, Zap } from "lucide-react"
+import { Send, Heart, MessageSquare, Bot, AlertCircle, ChevronLeft } from "lucide-react"
 import {
   API_BASE,
   getCommunityPosts,
@@ -18,18 +18,16 @@ import {
 } from "@/lib/api"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { PollDisplay } from "@/components/tickfeed/screens/community-screen"
+import { AlphaBadge, calcAlphaScore } from "@/components/tickfeed/alpha-badge"
 
-function calcAlphaScore(posts: number, likes: number, followers: number) {
-  return posts * 15 + likes * 8 + followers * 25
-}
 const ALPHA_TIERS = [
-  { min: 3000, label: "Market Maven",  color: "text-amber-500",   bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
-  { min: 1500, label: "Shark",         color: "text-purple-500",  bg: "bg-purple-500/10",  border: "border-purple-500/30" },
-  { min: 700,  label: "Strategist",    color: "text-blue-500",    bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
-  { min: 300,  label: "Bull",          color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
-  { min: 100,  label: "Analyst",       color: "text-primary",     bg: "bg-primary/10",     border: "border-primary/30"    },
-  { min: 1,    label: "Observer",      color: "text-foreground",  bg: "bg-muted",          border: "border-border"        },
-  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted",     border: "border-border"        },
+  { min: 3000, label: "Market Maven",  color: "text-amber-500",        bg: "bg-amber-500/10",   border: "border-amber-500/30"  },
+  { min: 1500, label: "Shark",         color: "text-purple-500",       bg: "bg-purple-500/10",  border: "border-purple-500/30" },
+  { min: 700,  label: "Strategist",    color: "text-blue-500",         bg: "bg-blue-500/10",    border: "border-blue-500/30"   },
+  { min: 300,  label: "Bull",          color: "text-emerald-500",      bg: "bg-emerald-500/10", border: "border-emerald-500/30"},
+  { min: 100,  label: "Analyst",       color: "text-rose-500",         bg: "bg-rose-500/10",    border: "border-rose-500/30"   },
+  { min: 1,    label: "Observer",      color: "text-slate-400",        bg: "bg-muted",          border: "border-border"        },
+  { min: 0,    label: "Lurker",        color: "text-muted-foreground", bg: "bg-muted",          border: "border-border"        },
 ]
 function alphaTier(score: number) {
   return ALPHA_TIERS.find((t) => score >= t.min) ?? ALPHA_TIERS[ALPHA_TIERS.length - 1]
@@ -303,8 +301,11 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <span className="text-sm font-semibold text-foreground">@{username}</span>
+              {!post.is_bot && post.author_alpha_score != null && (
+                <AlphaBadge score={post.author_alpha_score} />
+              )}
               <span className="text-[11px] text-muted-foreground ml-auto">{timeAgo}</span>
             </div>
             <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-wrap">{renderContent(post.content)}</p>
@@ -516,7 +517,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
                 <div className={`mx-4 mb-4 rounded-2xl border p-4 ${tier.bg} ${tier.border}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Zap className={`h-4 w-4 ${tier.color}`} />
+                      <AlphaBadge score={score} size="md" />
                       <span className={`text-sm font-bold ${tier.color}`}>{tier.label}</span>
                     </div>
                     <span className={`text-lg font-black ${tier.color}`}>{score.toLocaleString()}</span>

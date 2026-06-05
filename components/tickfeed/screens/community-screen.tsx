@@ -446,7 +446,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
                 <p className="text-[11px] text-muted-foreground">
                   @{post.username ?? "user"} · {time}
                 </p>
-                {post.post_type && (
+                {post.post_type && !post.reply_to_id && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${POST_TYPE_META[post.post_type]?.bg ?? ""} ${POST_TYPE_META[post.post_type]?.text ?? ""}`}>
                     {POST_TYPE_META[post.post_type]?.label ?? post.post_type}
                   </span>

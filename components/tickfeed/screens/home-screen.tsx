@@ -428,11 +428,10 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           ref={scrollRef0}
           className="absolute inset-0 overflow-y-auto pb-4 scrollbar-hide"
           style={{ transform: panel0Transform, transition: panelTransition }}
-          data-no-swipe
         >
           {/* Market Digest */}
           {(digestHeadline || digestBrief || Object.keys(indexDigests).length > 0) && (
-            <div className="px-4 pb-4">
+            <div className="px-4 pb-4" data-no-swipe>
               <MarketDigest
                 headline={digestHeadline}
                 brief={digestBrief}
@@ -508,7 +507,6 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           ref={scrollRef1}
           className="absolute inset-0 overflow-y-auto pb-4 scrollbar-hide"
           style={{ transform: panel1Transform, transition: panelTransition }}
-          data-no-swipe
         >
           {/* Upcoming Events strip */}
           {stockEvents.length > 0 && (

@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
 import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X, Calendar, ChevronRight } from "lucide-react"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { MarketDigest } from "../market-digest"
 import { NewsCard } from "../news-card"
-import { NewsCarousel } from "../news-carousel"
 import { FocusModeCarousel } from "../focus-mode-carousel"
 import type { NewsArticle } from "@/app/page"
 import {
@@ -41,10 +40,10 @@ const TABS = [
   { label: "Focus",     tab: "all"        as const, focus: true },
 ]
 
-// Module-level cache — survives component unmount/remount on tab switches
-// Bump _CACHE_VER whenever the feed response shape changes to auto-bust stale entries
+// Module-level cache + persisted state — survives component unmount/remount
 const _CACHE_VER = 4
-let _persistedTab = 0  // remembers active tab across remounts (e.g. article → back)
+let _persistedTab        = 0
+let _persistedFocusMode  = false
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
@@ -53,7 +52,8 @@ export function invalidateMyStocksCache() {
 }
 
 export function setHomeTabToFocus() {
-  _persistedTab = 2
+  _persistedTab       = 2
+  _persistedFocusMode = true
 }
 
 function feedItemToArticle(item: FeedItem): NewsArticle {
@@ -73,12 +73,18 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
 }
 
 export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
-  const [activeTab,       setActiveTab]       = useState(_persistedTab)
-  const [focusMode,       setFocusMode]       = useState(false)
-  const [news,            setNews]            = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
+  const [activeTab,            setActiveTab]            = useState(_persistedTab)
+  const [focusMode,            setFocusMode]            = useState(_persistedFocusMode)
+
+  // Per-tab news state (both panels always rendered)
+  const [tab0News,    setTab0News]    = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
+  const [tab1News,    setTab1News]    = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:1`]?.items ?? [])
+  const [tab0Loading, setTab0Loading] = useState(!_feedCache[`${_CACHE_VER}:0`])
+  const [tab1Loading, setTab1Loading] = useState(!_feedCache[`${_CACHE_VER}:1`])
+  const [tab0Error,   setTab0Error]   = useState("")
+  const [tab1Error,   setTab1Error]   = useState("")
+
   const [digest,          setDigest]          = useState<MarketDigestResponse | null>(_digestCache.data)
-  const [loading,         setLoading]         = useState(!_feedCache[`${_CACHE_VER}:0`])
-  const [error,           setError]           = useState("")
   const [unreadCount,     setUnreadCount]     = useState(0)
   const [focusArticles,   setFocusArticles]   = useState<NewsArticle[]>([])
   const [focusPage,       setFocusPage]       = useState(1)
@@ -90,9 +96,32 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   const [watchlist,       setWatchlist]       = useState<WatchlistItem[]>([])
   const [stockEvents,     setStockEvents]     = useState<StockEvent[]>([])
   const [selectedEvent,   setSelectedEvent]   = useState<StockEvent | null>(null)
-  const scrollRef   = useRef<HTMLDivElement>(null)
-  const swipeStartX = useRef<number | null>(null)
-  const swipeStartY = useRef<number | null>(null)
+
+  // Swipe tracking
+  const [tabSwipeDx,    setTabSwipeDx]    = useState(0)
+  const [isSwipingTabs, setIsSwipingTabs] = useState(false)
+
+  // Scroll refs — one per tab panel, plus a switching ref for pull-to-refresh
+  const scrollRef0     = useRef<HTMLDivElement>(null)
+  const scrollRef1     = useRef<HTMLDivElement>(null)
+  const pullScrollRef  = useRef<HTMLDivElement | null>(null)
+
+  // Swipe gesture refs
+  const swipeStartX    = useRef<number | null>(null)
+  const swipeStartY    = useRef<number | null>(null)
+  const swipeIsHoriz   = useRef<boolean | null>(null) // null=undecided, true=horiz, false=vert
+
+  // Refs so callbacks never go stale
+  const fetchFocusPageRef    = useRef<typeof fetchFocusPage | null>(null)
+  const focusArticlesLenRef  = useRef(0)
+  const hasMoreRef           = useRef(focusHasMore)
+  const articlesLenRef       = useRef(focusArticles.length)
+  const onLoadMoreRef        = useRef<(() => void) | null>(null)
+
+  // Keep pull-to-refresh ref pointing at the active panel's scroll container
+  useLayoutEffect(() => {
+    pullScrollRef.current = activeTab === 0 ? scrollRef0.current : scrollRef1.current
+  }, [activeTab])
 
   const fetchFocusPage = useCallback(async (page: number) => {
     if (page === 1) setFocusLoading(true)
@@ -111,10 +140,18 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
     }
   }, [token])
 
+  // Keep refs in sync
+  useEffect(() => { fetchFocusPageRef.current    = fetchFocusPage },              [fetchFocusPage])
+  useEffect(() => { focusArticlesLenRef.current  = focusArticles.length },        [focusArticles.length])
+  useEffect(() => { hasMoreRef.current           = focusHasMore },                [focusHasMore])
+  useEffect(() => { articlesLenRef.current       = focusArticles.length },        [focusArticles.length])
+
   const loadMoreFocus = useCallback(() => {
     if (focusLoadingMore || !focusHasMore) return
     fetchFocusPage(focusPage + 1)
   }, [focusLoadingMore, focusHasMore, focusPage, fetchFocusPage])
+
+  useEffect(() => { onLoadMoreRef.current = loadMoreFocus }, [loadMoreFocus])
 
   const changeTab = (tab: number) => {
     _persistedTab = tab
@@ -122,44 +159,93 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   }
 
   const enterFocusMode = () => {
+    _persistedFocusMode = true
     changeTab(2)
     setFocusMode(true)
-    if (focusArticles.length === 0) fetchFocusPage(1)
+    if (focusArticlesLenRef.current === 0) fetchFocusPage(1)
   }
 
   const exitFocusMode = () => {
+    _persistedFocusMode = false
     setFocusMode(false)
     changeTab(0)
   }
 
+  // On mount: if persisted focus mode was active, fetch articles immediately
+  useEffect(() => {
+    if (_persistedFocusMode && focusArticlesLenRef.current === 0) {
+      fetchFocusPage(1)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Touch handlers for tab swiping ──────────────────────────────────────
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if ((e.target as Element).closest("[data-no-swipe]")) return
-    swipeStartX.current = e.touches[0].clientX
-    swipeStartY.current = e.touches[0].clientY
+    swipeStartX.current  = e.touches[0].clientX
+    swipeStartY.current  = e.touches[0].clientY
+    swipeIsHoriz.current = null
   }, [])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (focusMode) return
+    if (swipeStartX.current === null || swipeStartY.current === null) return
+    const dx = e.touches[0].clientX - swipeStartX.current
+    const dy = e.touches[0].clientY - swipeStartY.current
+
+    // Decide gesture direction on first significant movement
+    if (swipeIsHoriz.current === null && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+      swipeIsHoriz.current = Math.abs(dx) > Math.abs(dy)
+    }
+
+    if (!swipeIsHoriz.current) return
+
+    // Clamp: can't swipe further than one tab away
+    const clampedDx = _persistedTab === 0
+      ? Math.min(0, dx)          // on tab 0: only left swipe allowed
+      : _persistedTab === 1
+      ? Math.max(0, dx)          // on tab 1: only right swipe allowed (focus via button)
+      : dx
+
+    setIsSwipingTabs(true)
+    setTabSwipeDx(clampedDx)
+  }, [focusMode])
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     if (swipeStartX.current === null || swipeStartY.current === null) return
     const dx = e.changedTouches[0].clientX - swipeStartX.current
     const dy = e.changedTouches[0].clientY - swipeStartY.current
-    swipeStartX.current = null
-    swipeStartY.current = null
+    swipeStartX.current  = null
+    swipeStartY.current  = null
+    swipeIsHoriz.current = null
+
+    // Reset live swipe — CSS transition will animate to final position
+    setIsSwipingTabs(false)
+    setTabSwipeDx(0)
+
+    if (focusMode) return
     if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return
+
     setActiveTab((prev) => {
       const next = prev + (dx < 0 ? 1 : -1)
       if (next < 0 || next > 2) return prev
-      if (next === 2) { setFocusMode(true); _persistedTab = 2; return 2 }
-      setFocusMode(false)
+      if (next === 2) {
+        _persistedFocusMode = true
+        _persistedTab = 2
+        setFocusMode(true)
+        if (focusArticlesLenRef.current === 0) fetchFocusPageRef.current?.(1)
+        return 2
+      }
+      _persistedFocusMode = false
       _persistedTab = next
+      setFocusMode(false)
       return next
     })
-  }, [])
+  }, [focusMode])
 
   // Fetch initial unread count + subscribe to SSE for live updates
   useEffect(() => {
     if (!token) return
     getUnreadCount(token).then(setUnreadCount).catch(() => {})
-
     const url = `${API_BASE}/api/notifications/stream?token=${encodeURIComponent(token)}`
     const es = new EventSource(url)
     es.onmessage = (e) => {
@@ -174,9 +260,13 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  const fetchFeed = useCallback(async (tabIdx: number, force = false) => {
+  const fetchFeed = useCallback(async (tabIdx: 0 | 1, force = false) => {
     const cacheKey = `${_CACHE_VER}:${tabIdx}`
-    const entry = _feedCache[cacheKey]
+    const entry    = _feedCache[cacheKey]
+    const setNews    = tabIdx === 0 ? setTab0News    : setTab1News
+    const setLoading = tabIdx === 0 ? setTab0Loading : setTab1Loading
+    const setError   = tabIdx === 0 ? setTab0Error   : setTab1Error
+
     if (!force && entry && Date.now() - entry.ts < FEED_TTL_MS) {
       setNews(entry.items)
       setLoading(false)
@@ -212,8 +302,18 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
     }
   }, [token])
 
+  // Load both tabs on mount + active-tab-specific extras
   useEffect(() => {
-    fetchFeed(activeTab)
+    fetchFeed(0)
+    fetchFeed(1)
+    fetchDigest()
+    getWatchlist(token).then(setWatchlist).catch(() => {})
+    getWatchlistEvents(token).then(setStockEvents).catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // On tab switch: re-fetch active tab (respects cache TTL) + refresh side data
+  useEffect(() => {
+    fetchFeed(activeTab < 2 ? activeTab as 0 | 1 : 0)
     if (activeTab === 0) fetchDigest()
     if (activeTab === 1) {
       if (watchlist.length === 0) getWatchlist(token).then(setWatchlist).catch(() => {})
@@ -226,11 +326,12 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
   // Silently refresh market ticker every 60 s while on the For You tab
   usePolling(() => fetchDigest(true), DIGEST_POLL_MS, activeTab === 0)
 
-  // Pull-to-refresh
+  // Pull-to-refresh — always attached to the active panel
   const handlePullRefresh = useCallback(async () => {
-    await Promise.all([fetchFeed(activeTab, true), activeTab === 0 ? fetchDigest(true) : Promise.resolve()])
+    const tab = activeTab < 2 ? activeTab as 0 | 1 : 0
+    await Promise.all([fetchFeed(tab, true), tab === 0 ? fetchDigest(true) : Promise.resolve()])
   }, [activeTab, fetchFeed, fetchDigest])
-  const { pullState } = usePullToRefresh(scrollRef, handlePullRefresh)
+  const { pullState } = usePullToRefresh(pullScrollRef as React.RefObject<HTMLElement>, handlePullRefresh, activeTab)
 
   const digestHeadline = digest?.top_story?.title ?? null
   const digestBrief    = digest?.market_brief ?? null
@@ -239,10 +340,19 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
         day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
       })
     : null
-  const indexDigests   = digest?.index_digests ?? {}
+  const indexDigests = digest?.index_digests ?? {}
+
+  // CSS transform for each tab panel (0 and 1)
+  // translateX(calc((panelIdx - activeTab) * 100% + tabSwipeDx))
+  // But capped so tab 2 (focus) just shows panel 0 underneath the overlay
+  const tabOffset = Math.min(activeTab, 1)
+  const panelTransition = isSwipingTabs ? "none" : "transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94)"
+
+  const panel0Transform = `translateX(calc(${0 - tabOffset} * 100% + ${tabSwipeDx}px))`
+  const panel1Transform = `translateX(calc(${1 - tabOffset} * 100% + ${tabSwipeDx}px))`
 
   return (
-    <div className="flex h-full flex-col bg-background" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="flex h-full flex-col bg-background" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
       {/* Focus mode full-screen overlay */}
       {focusMode && (
         <FocusModeCarousel
@@ -255,6 +365,7 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           onLoadMore={loadMoreFocus}
         />
       )}
+
       {/* Header */}
       <header className="flex items-center justify-between px-4 pb-2 pt-4 bg-background sticky top-0 z-10">
         <h1 className="text-2xl font-bold">
@@ -309,70 +420,134 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
         ))}
       </div>
 
-      {/* Scrollable content */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto pb-4 scrollbar-hide">
-        {/* Market Digest — For You only */}
-        {activeTab === 0 && (digestHeadline || digestBrief || Object.keys(indexDigests).length > 0) && (
-          <div className="px-4 pb-4" data-no-swipe>
-            <MarketDigest
-              headline={digestHeadline}
-              brief={digestBrief}
-              dateLabel={digestDate}
-              indexDigests={indexDigests}
-            />
-          </div>
-        )}
+      {/* ── 2-panel sliding content area ─────────────────────────────────── */}
+      <div className="flex-1 overflow-hidden relative">
 
-        {/* Upcoming Events strip — My Stocks tab only */}
-        {activeTab === 1 && stockEvents.length > 0 && (
-          <div className="px-4 py-3 border-b border-border/50">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
-              <Calendar className="h-3 w-3" /> Upcoming Events
-            </p>
-            <div className="flex gap-2.5 overflow-x-auto scrollbar-hide" data-no-swipe>
-              {stockEvents.map((ev) => {
-                const evDate = new Date(ev.event_date + "T00:00:00")
-                const todayMs = new Date().setHours(0, 0, 0, 0)
-                const diffDays = Math.round((evDate.getTime() - todayMs) / 86400000)
-                const dateLabel = diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow" : evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
-                const label = ev.event_type.replace("_", " ")
-                return (
-                  <button
-                    key={ev.id}
-                    onClick={() => setSelectedEvent(ev)}
-                    className="shrink-0 flex flex-col gap-1 rounded-2xl border border-border bg-muted/60 px-3.5 py-2.5 text-left"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[11px] font-black text-foreground">{ev.symbol}</span>
-                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <span className="text-xs font-semibold capitalize text-primary">{label}</span>
-                    <span className="text-[10px] text-muted-foreground">{dateLabel}</span>
-                  </button>
-                )
-              })}
+        {/* ── Panel 0: For You ──────────────────────────────────────────── */}
+        <div
+          ref={scrollRef0}
+          className="absolute inset-0 overflow-y-auto pb-4 scrollbar-hide"
+          style={{ transform: panel0Transform, transition: panelTransition }}
+          data-no-swipe
+        >
+          {/* Market Digest */}
+          {(digestHeadline || digestBrief || Object.keys(indexDigests).length > 0) && (
+            <div className="px-4 pb-4">
+              <MarketDigest
+                headline={digestHeadline}
+                brief={digestBrief}
+                dateLabel={digestDate}
+                indexDigests={indexDigests}
+              />
             </div>
-          </div>
-        )}
+          )}
 
-        {/* News section */}
-        <div className="border-t border-border/50">
-          {activeTab !== 2 && (
+          {/* News section */}
+          <div className="border-t border-border/50">
             <div className="flex items-center justify-between px-4 py-3">
-              <h2 className="font-semibold text-foreground">
-                {activeTab === 0 && "Top News"}
-                {activeTab === 1 && "Your Stock Updates"}
-              </h2>
-              {activeTab === 0 && (
-                <button
-                  onClick={enterFocusMode}
-                  className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
-                >
-                  Focus mode
-                  <Layers className="h-3.5 w-3.5" />
+              <h2 className="font-semibold text-foreground">Top News</h2>
+              <button
+                onClick={enterFocusMode}
+                className="text-sm font-medium text-primary hover:underline flex items-center gap-1"
+              >
+                Focus mode
+                <Layers className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {tab0Loading ? (
+              <div className="space-y-0">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="px-4 py-4 border-b border-border/50 animate-pulse">
+                    <div className="flex gap-2 mb-2">
+                      <div className="h-3 w-20 rounded bg-muted" />
+                      <div className="h-3 w-12 rounded bg-muted" />
+                    </div>
+                    <div className="h-4 w-full rounded bg-muted mb-1" />
+                    <div className="h-4 w-3/4 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            ) : tab0Error ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <p className="text-muted-foreground">{tab0Error}</p>
+                <button onClick={() => fetchFeed(0)} className="mt-3 text-sm text-primary hover:underline">
+                  Try again
                 </button>
-              )}
-              {activeTab === 1 && !loading && (() => {
+              </div>
+            ) : tab0News.length > 0 ? (
+              <div>
+                {tab0News.map((item) => (
+                  <NewsCard
+                    key={item.id}
+                    source={item.source}
+                    timestamp={item.timestamp}
+                    headline={item.headline}
+                    tags={item.tags}
+                    aiSummaryAvailable={item.aiSummaryAvailable}
+                    commentsCount={item.commentsCount}
+                    imageUrl={item.imageUrl}
+                    onClick={() => onNewsClick?.(item)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                  <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No news available</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Check back later for updates</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Panel 1: My Stocks ───────────────────────────────────────── */}
+        <div
+          ref={scrollRef1}
+          className="absolute inset-0 overflow-y-auto pb-4 scrollbar-hide"
+          style={{ transform: panel1Transform, transition: panelTransition }}
+          data-no-swipe
+        >
+          {/* Upcoming Events strip */}
+          {stockEvents.length > 0 && (
+            <div className="px-4 py-3 border-b border-border/50">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Calendar className="h-3 w-3" /> Upcoming Events
+              </p>
+              <div className="flex gap-2.5 overflow-x-auto scrollbar-hide" data-no-swipe>
+                {stockEvents.map((ev) => {
+                  const evDate   = new Date(ev.event_date + "T00:00:00")
+                  const todayMs  = new Date().setHours(0, 0, 0, 0)
+                  const diffDays = Math.round((evDate.getTime() - todayMs) / 86400000)
+                  const dateLabel = diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow"
+                    : evDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                  const label = ev.event_type.replace("_", " ")
+                  return (
+                    <button
+                      key={ev.id}
+                      onClick={() => setSelectedEvent(ev)}
+                      className="shrink-0 flex flex-col gap-1 rounded-2xl border border-border bg-muted/60 px-3.5 py-2.5 text-left"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[11px] font-black text-foreground">{ev.symbol}</span>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                      <span className="text-xs font-semibold capitalize text-primary">{label}</span>
+                      <span className="text-[10px] text-muted-foreground">{dateLabel}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* News section */}
+          <div className="border-t border-border/50">
+            <div className="flex items-center justify-between px-4 py-3">
+              <h2 className="font-semibold text-foreground">Your Stock Updates</h2>
+              {!tab1Loading && (() => {
                 const symbols = watchlist.map(w => w.symbol)
                 if (symbols.length < 2) return null
                 return (
@@ -398,18 +573,10 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                 )
               })()}
             </div>
-          )}
 
-          {loading ? (
-            <div className="space-y-0">
-              {activeTab === 2 ? (
-                /* Carousel skeleton */
-                <div className="px-4 pb-4">
-                  <div className="h-2 w-full rounded bg-muted mb-3 animate-pulse" />
-                  <div className="rounded-2xl bg-muted animate-pulse" style={{ height: "calc(100dvh - 274px)", minHeight: "320px" }} />
-                </div>
-              ) : (
-                [1, 2, 3, 4].map((i) => (
+            {tab1Loading ? (
+              <div className="space-y-0">
+                {[1, 2, 3, 4].map((i) => (
                   <div key={i} className="px-4 py-4 border-b border-border/50 animate-pulse">
                     <div className="flex gap-2 mb-2">
                       <div className="h-3 w-20 rounded bg-muted" />
@@ -418,33 +585,21 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                     <div className="h-4 w-full rounded bg-muted mb-1" />
                     <div className="h-4 w-3/4 rounded bg-muted" />
                   </div>
-                ))
-              )}
-            </div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <p className="text-muted-foreground">{error}</p>
-              <button
-                onClick={() => fetchFeed(activeTab)}
-                className="mt-3 text-sm text-primary hover:underline"
-              >
-                Try again
-              </button>
-            </div>
-          ) : news.length > 0 ? (
-            activeTab === 2 ? (
-              /* ── Swipeable carousel for All News ── */
-              <NewsCarousel
-                articles={news}
-                onArticleClick={(article) => onNewsClick?.(article)}
-              />
-            ) : (
-              /* ── Standard list for For You + My Stocks ── */
+                ))}
+              </div>
+            ) : tab1Error ? (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <p className="text-muted-foreground">{tab1Error}</p>
+                <button onClick={() => fetchFeed(1)} className="mt-3 text-sm text-primary hover:underline">
+                  Try again
+                </button>
+              </div>
+            ) : tab1News.length > 0 ? (
               <div>
                 {(() => {
-                  const filtered = activeTab === 1 && stockFilter
-                    ? news.filter(a => a.affectedSymbol === stockFilter)
-                    : news
+                  const filtered = stockFilter
+                    ? tab1News.filter(a => a.affectedSymbol === stockFilter)
+                    : tab1News
                   if (filtered.length === 0 && stockFilter) {
                     return (
                       <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -466,22 +621,22 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                       aiSummaryAvailable={item.aiSummaryAvailable}
                       commentsCount={item.commentsCount}
                       imageUrl={item.imageUrl}
-                      affectedSymbol={activeTab === 1 ? item.affectedSymbol : undefined}
+                      affectedSymbol={item.affectedSymbol}
                       onClick={() => onNewsClick?.(item)}
                     />
                   ))
                 })()}
               </div>
-            )
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                <TrendingUp className="h-6 w-6 text-muted-foreground" />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                  <TrendingUp className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground">No news available</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Check back later for updates</p>
               </div>
-              <p className="text-muted-foreground">No news available</p>
-              <p className="text-sm text-muted-foreground/70 mt-1">Check back later for updates</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -503,7 +658,6 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
               </button>
             </div>
             <div className="overflow-y-auto px-4 py-4 space-y-4" style={{ maxHeight: "calc(75dvh - 65px)" }}>
-              {/* Key dates */}
               <div className="flex gap-3">
                 <div className="flex-1 rounded-xl bg-muted/50 border border-border/50 p-3 text-center">
                   <p className="text-xs text-muted-foreground mb-0.5">Event Date</p>
@@ -520,7 +674,6 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
                   </div>
                 )}
               </div>
-              {/* AI summary */}
               {selectedEvent.ai_summary ? (
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">What this means</p>
@@ -534,15 +687,12 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
         </>
       ), document.body)}
 
-      {/* Stock filter bottom sheet — rendered via portal to escape overflow:hidden containers */}
+      {/* Stock filter bottom sheet */}
       {showStockFilterSheet && createPortal((() => {
         const symbols = watchlist.map(w => w.symbol)
         return (
           <>
-            <div
-              className="fixed inset-0 z-40 bg-black/40"
-              onClick={() => setShowStockFilterSheet(false)}
-            />
+            <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setShowStockFilterSheet(false)} />
             <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-background" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
               <div className="flex items-center justify-between px-4 py-4 border-b border-border">
                 <span className="font-semibold text-foreground">Filter by Stock</span>

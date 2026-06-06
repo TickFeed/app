@@ -17,6 +17,7 @@ export type PullState = "idle" | "pulling" | "refreshing"
 export function usePullToRefresh(
   containerRef: React.RefObject<HTMLElement | null>,
   onRefresh: () => Promise<void>,
+  attachKey?: unknown,
 ) {
   const [pullState, setPullState] = useState<PullState>("idle")
   const [visualDistance, setVisualDistance] = useState(0)
@@ -100,7 +101,7 @@ export function usePullToRefresh(
       el.removeEventListener("touchmove",  onTouchMove)
       el.removeEventListener("touchend",   onTouchEnd)
     }
-  }, [containerRef])
+  }, [containerRef, attachKey])
 
   /** 0 → 1 progress toward trigger threshold */
   const progress = Math.min(visualDistance / (PULL_THRESHOLD * RESISTANCE), 1)

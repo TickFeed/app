@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { ChevronLeft, Bell, AtSign, Newspaper, Check } from "lucide-react"
+import { ChevronLeft, Bell, AtSign, Newspaper, Check, MessageCircle, BarChart2, TrendingUp, TrendingDown, Calendar } from "lucide-react"
 import {
   getNotifications,
   markNotificationsRead,
@@ -19,16 +19,20 @@ interface NotificationsScreenProps {
 }
 
 function NotifIcon({ type }: { type: AppNotification["type"] }) {
-  if (type === "mention") {
-    return (
-      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-        <AtSign className="h-5 w-5 text-primary" />
-      </div>
-    )
+  const map: Record<AppNotification["type"], { icon: React.ReactNode; bg: string }> = {
+    mention:        { icon: <AtSign className="h-5 w-5 text-primary" />,            bg: "bg-primary/10" },
+    reply:          { icon: <MessageCircle className="h-5 w-5 text-primary" />,     bg: "bg-primary/10" },
+    poll_vote:      { icon: <BarChart2 className="h-5 w-5 text-violet-500" />,      bg: "bg-violet-500/10" },
+    market_open:    { icon: <TrendingUp className="h-5 w-5 text-emerald-500" />,    bg: "bg-emerald-500/10" },
+    market_close:   { icon: <TrendingDown className="h-5 w-5 text-orange-500" />,   bg: "bg-orange-500/10" },
+    event_reminder: { icon: <Calendar className="h-5 w-5 text-blue-500" />,         bg: "bg-blue-500/10" },
+    stock_event:    { icon: <Calendar className="h-5 w-5 text-blue-500" />,         bg: "bg-blue-500/10" },
+    stock_news:     { icon: <Newspaper className="h-5 w-5 text-emerald-500" />,     bg: "bg-emerald-500/10" },
   }
+  const { icon, bg } = map[type] ?? map.stock_news
   return (
-    <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-      <Newspaper className="h-5 w-5 text-emerald-500" />
+    <div className={`h-10 w-10 rounded-full ${bg} flex items-center justify-center flex-shrink-0`}>
+      {icon}
     </div>
   )
 }

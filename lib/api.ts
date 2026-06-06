@@ -231,11 +231,11 @@ export interface FollowingUser {
 
 export interface AppNotification {
   id: number
-  type: "mention" | "stock_news"
+  type: "mention" | "reply" | "poll_vote" | "stock_news" | "stock_event" | "market_open" | "market_close" | "event_reminder"
   title: string
   body: string | null
   read: boolean
-  target_type: "article" | "stock" | "community" | null
+  target_type: "article" | "stock" | "community" | "stock_event" | null
   target_id: string | null
   target_tab: "discuss" | "ai-summary" | "overview" | "ai-chat" | null
   source_post_id: number | null

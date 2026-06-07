@@ -38,15 +38,12 @@ export function DailyCheckinSheet({ streakCount, poll: initialPoll, onVote, onCl
     `${streakCount} day streak!`
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      {/* Sheet */}
-      <div className="relative w-full max-w-lg rounded-t-2xl bg-background pb-8 pt-5 px-5 shadow-xl animate-in slide-in-from-bottom duration-300">
-        {/* Handle */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 h-1 w-10 rounded-full bg-muted-foreground/30" />
-
+      {/* Modal */}
+      <div className="relative w-full max-w-sm rounded-2xl bg-background pb-6 pt-5 px-5 shadow-xl animate-in fade-in zoom-in-95 duration-200">
         {/* Close */}
         <button onClick={onClose} className="absolute right-4 top-4 rounded-full p-1 text-muted-foreground hover:bg-muted transition-colors">
           <X className="h-4 w-4" />

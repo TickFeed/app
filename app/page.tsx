@@ -18,6 +18,7 @@ import { NotificationsScreen } from "@/components/tickfeed/screens/notifications
 import { SearchScreen } from "@/components/tickfeed/screens/search-screen"
 import { GlobalAIScreen } from "@/components/tickfeed/screens/global-ai-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
+import { DailyCheckinSheet } from "@/components/tickfeed/daily-checkin-sheet"
 import {
   clearAuthSession,
   completeProfile,
@@ -33,7 +34,7 @@ import {
   type AuthUser,
   type NewUserProfile,
 } from "@/lib/auth"
-import { getUserPublicProfile, type PublicUserProfile } from "@/lib/api"
+import { getUserPublicProfile, getTodayPoll, sendHeartbeat, castPollVote, type PublicUserProfile, type DailyPoll } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
 export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search" | "ai"
@@ -83,6 +84,11 @@ export default function TickFeedApp() {
   const [profileInitialUserId, setProfileInitialUserId] = useState<number | undefined>(undefined)
   const [profileInitialUser, setProfileInitialUser] = useState<PublicUserProfile | null>(null)
   const articleOpenedFromNotification = useRef(false)
+  const currentScreenRef = useRef<Screen>("home")
+
+  const [streakCount,      setStreakCount]      = useState(0)
+  const [showCheckin,      setShowCheckin]      = useState(false)
+  const [todayPoll,        setTodayPoll]        = useState<DailyPoll | null>(null)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -96,6 +102,30 @@ export default function TickFeedApp() {
     }
     setSessionBootstrapped(true)
   }, [])
+
+  // Keep ref in sync so heartbeat can read current screen without stale closure
+  useEffect(() => { currentScreenRef.current = currentScreen }, [currentScreen])
+
+  // Heartbeat on app open — updates streak; shows check-in sheet only on direct home opens
+  useEffect(() => {
+    const token = authSession?.token
+    if (!token) return
+    sendHeartbeat(token)
+      .then(({ streakCount, isNewDay }) => {
+        setStreakCount(streakCount)
+        if (isNewDay) {
+          getTodayPoll(token).then(setTodayPoll).catch(() => {})
+          // Wait 350ms so any deep-link navigation has time to update currentScreen
+          setTimeout(() => {
+            if (currentScreenRef.current === "home") {
+              setShowCheckin(true)
+            }
+          }, 350)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authSession?.token])
 
   const resetShell = () => {
     setCurrentScreen("home")
@@ -479,6 +509,7 @@ export default function TickFeedApp() {
         return (
           <HomeScreen
             token={token}
+            streakCount={streakCount}
             onNewsClick={handleNewsClick}
             onNotificationsClick={() => setCurrentScreen("notifications")}
             onSearchClick={() => setCurrentScreen("search")}
@@ -567,7 +598,7 @@ export default function TickFeedApp() {
       case "ai":
         return <GlobalAIScreen token={token} />
       default:
-        return <HomeScreen token={token} onNewsClick={handleNewsClick} onNotificationsClick={() => setCurrentScreen("notifications")} />
+        return <HomeScreen token={token} streakCount={streakCount} onNewsClick={handleNewsClick} onNotificationsClick={() => setCurrentScreen("notifications")} />
     }
   }
 
@@ -605,6 +636,14 @@ export default function TickFeedApp() {
     <div className="flex h-[100dvh] flex-col bg-background safe-area-pt">
       <div className="flex-1 overflow-hidden">{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
+      {showCheckin && authSession?.token && (
+        <DailyCheckinSheet
+          streakCount={streakCount}
+          poll={todayPoll}
+          onVote={(pollId, optionIdx) => castPollVote(authSession.token, pollId, optionIdx)}
+          onClose={() => setShowCheckin(false)}
+        />
+      )}
     </div>
   )
 }

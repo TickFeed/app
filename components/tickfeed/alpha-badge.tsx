@@ -1,6 +1,6 @@
 "use client"
 
-import { Crown, Zap, Target, Flame, Star, Eye, Circle } from "lucide-react"
+import { Crown, Zap, Target, Rocket, Star, Eye, Circle } from "lucide-react"
 
 export function calcAlphaScore(posts: number, likes: number, followers: number) {
   return posts * 15 + likes * 8 + followers * 25
@@ -10,7 +10,7 @@ export const ALPHA_BADGE_TIERS = [
   { min: 3000, Icon: Crown,  color: "text-amber-500",   showInline: true  },
   { min: 1500, Icon: Zap,    color: "text-purple-500",  showInline: true  },
   { min: 700,  Icon: Target, color: "text-blue-500",    showInline: true  },
-  { min: 300,  Icon: Flame,  color: "text-emerald-500", showInline: true  },
+  { min: 300,  Icon: Rocket,  color: "text-emerald-500", showInline: true  },
   { min: 100,  Icon: Star,   color: "text-rose-500",    showInline: true  },
   { min: 1,    Icon: Eye,    color: "text-slate-400",   showInline: false },
   { min: 0,    Icon: Circle, color: "text-zinc-400",    showInline: false },

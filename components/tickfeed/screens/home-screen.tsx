@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from "react"
 import { createPortal } from "react-dom"
-import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X, Calendar, ChevronRight } from "lucide-react"
+import { Search, Bell, TrendingUp, RefreshCw, Layers, SlidersHorizontal, X, Calendar, ChevronRight, Flame } from "lucide-react"
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh"
 import { MarketDigest } from "../market-digest"
 import { NewsCard } from "../news-card"
@@ -29,6 +29,7 @@ const FEED_TTL_MS    = 5 * 60_000  // 5 minutes
 
 interface HomeScreenProps {
   token: string
+  streakCount?: number
   onNewsClick?: (article: NewsArticle) => void
   onNotificationsClick?: () => void
   onSearchClick?: () => void
@@ -72,7 +73,7 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
   }
 }
 
-export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
+export function HomeScreen({ token, streakCount: streakCountProp = 0, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
   const [activeTab,            setActiveTab]            = useState(_persistedTab)
   const [focusMode,            setFocusMode]            = useState(_persistedFocusMode)
 
@@ -86,6 +87,8 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
 
   const [digest,          setDigest]          = useState<MarketDigestResponse | null>(_digestCache.data)
   const [unreadCount,     setUnreadCount]     = useState(0)
+  const streakCount = streakCountProp
+  const [showStreakTip,   setShowStreakTip]    = useState(false)
   const [focusArticles,   setFocusArticles]   = useState<NewsArticle[]>([])
   const [focusPage,       setFocusPage]       = useState(1)
   const [focusHasMore,    setFocusHasMore]    = useState(true)
@@ -373,6 +376,30 @@ export function HomeScreen({ token, onNewsClick, onNotificationsClick, onSearchC
           <span className="text-primary">Feed</span>
         </h1>
         <div className="flex items-center gap-2">
+          {streakCount > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowStreakTip((v) => !v)}
+                className="flex items-center gap-1 rounded-full bg-orange-500/15 px-2.5 py-1 border border-orange-500/20 active:scale-95 transition-transform"
+              >
+                <Flame className="h-3.5 w-3.5 text-orange-500" />
+                <span className="text-xs font-bold text-orange-500 tabular-nums">{streakCount}</span>
+              </button>
+              {showStreakTip && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-52 rounded-xl bg-popover border border-border shadow-lg p-3 z-50"
+                  onClick={() => setShowStreakTip(false)}
+                >
+                  <p className="text-sm font-semibold text-foreground">
+                    {streakCount === 1 ? "Day 1 — great start!" : `${streakCount} day streak!`}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Open TickFeed every day to keep your streak going.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={onSearchClick}
             className="rounded-full p-2 text-foreground hover:bg-muted transition-colors"

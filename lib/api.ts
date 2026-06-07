@@ -348,6 +348,32 @@ export async function getUserStats(token: string): Promise<UserStats> {
   return apiGet('/api/user/stats', token)
 }
 
+export async function sendHeartbeat(token: string): Promise<{ streakCount: number; isNewDay: boolean }> {
+  return apiPost('/api/user/heartbeat', token)
+}
+
+export interface DailyPoll {
+  id: number
+  question: string
+  options: string[]
+  poll_date: string
+  my_vote: number | null
+  vote_counts: number[]
+  total_votes: number
+}
+
+export async function getTodayPoll(token: string): Promise<DailyPoll | null> {
+  try {
+    return await apiGet<DailyPoll>('/api/polls/today', token)
+  } catch {
+    return null
+  }
+}
+
+export async function castPollVote(token: string, pollId: number, optionIdx: number): Promise<{ my_vote: number; vote_counts: number[]; total_votes: number }> {
+  return apiPost(`/api/polls/${pollId}/vote`, token, { option_idx: optionIdx })
+}
+
 export type InteractionHistoryItem =
   | {
       type: "article"

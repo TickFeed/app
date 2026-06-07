@@ -510,6 +510,12 @@ export default function TickFeedApp() {
           <HomeScreen
             token={token}
             streakCount={streakCount}
+            onStreakBadgeClick={() => {
+              if (todayPoll === null && authSession?.token) {
+                getTodayPoll(authSession.token).then(setTodayPoll).catch(() => {})
+              }
+              setShowCheckin(true)
+            }}
             onNewsClick={handleNewsClick}
             onNotificationsClick={() => setCurrentScreen("notifications")}
             onSearchClick={() => setCurrentScreen("search")}

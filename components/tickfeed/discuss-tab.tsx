@@ -293,8 +293,8 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
             className={`h-9 w-9 flex-shrink-0 ${!post.is_bot ? "cursor-pointer" : ""}`}
             onClick={(e) => { if (post.is_bot) return; e.stopPropagation(); handleUserClick(post.author_id) }}
           >
-            {post.avatar_style && post.username && (
-              <AvatarImage src={dicebearUrl(post.avatar_style, post.username)} alt={initials} />
+            {post.avatar_style && (
+              <AvatarImage src={dicebearUrl(post.avatar_style, String(post.author_id))} alt={initials} />
             )}
             <AvatarFallback className="text-xs font-bold bg-primary/15 text-primary">
               {post.is_bot ? <Bot className="h-4 w-4" /> : initials}
@@ -488,7 +488,7 @@ export function DiscussTab({ token, newsId, symbol, isActive, onCountChange }: D
             const pInitials = profileUser.first_name
               ? (profileUser.first_name[0] + (profileUser.last_name?.[0] ?? "")).toUpperCase()
               : (profileUser.username ?? "?").slice(0, 2).toUpperCase()
-            const avatarSrc = dicebearUrl(profileUser.avatar_style, profileUser.username ?? "")
+            const avatarSrc = dicebearUrl(profileUser.avatar_style, String(profileUser.id))
             const score = calcAlphaScore(profileUser.posts_count, profileUser.likes_received, profileUser.followers_count)
             const tier = alphaTier(score)
             const isOwnProfile = profileUser.id === myUserId

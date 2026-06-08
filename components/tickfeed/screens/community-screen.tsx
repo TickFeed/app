@@ -192,12 +192,26 @@ export function PollDisplay({
     e.stopPropagation()
     if (voting !== null || !onVoted) return
     if (post.my_poll_vote === idx) return  // same option — no-op
+
+    // Optimistic update
+    const prevPost = post
+    const newOpts = opts.map((o, i) => {
+      if (i === post.my_poll_vote) return { ...o, votes: Math.max(0, o.votes - 1) }
+      if (i === idx) return { ...o, votes: o.votes + 1 }
+      return o
+    })
+    const newTotal = post.my_poll_vote === null ? total + 1 : total
+    onVoted({ ...post, poll_options: newOpts, my_poll_vote: idx })
+
     setVoting(idx)
     try {
       const res = await votePoll(token, post.id, idx)
       onVoted({ ...post, poll_options: res.poll_options, my_poll_vote: res.my_poll_vote })
-    } catch { /* ignore */ }
-    finally { setVoting(null) }
+    } catch {
+      onVoted(prevPost) // revert on failure
+    } finally {
+      setVoting(null)
+    }
   }
 
   return (

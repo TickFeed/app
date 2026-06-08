@@ -19,13 +19,22 @@ export function DailyCheckinSheet({ streakCount, poll: initialPoll, onVote, onCl
   const total = poll?.total_votes ?? 0
 
   const handleVote = async (optionIdx: number) => {
-    if (!poll || voting || hasVoted) return
+    if (!poll || voting || poll.my_vote === optionIdx) return
+
+    // Optimistic update
+    const prev = { ...poll, vote_counts: [...poll.vote_counts] }
+    const newCounts = [...poll.vote_counts]
+    if (poll.my_vote !== null) newCounts[poll.my_vote] = Math.max(0, newCounts[poll.my_vote] - 1)
+    newCounts[optionIdx] = newCounts[optionIdx] + 1
+    const newTotal = poll.my_vote === null ? poll.total_votes + 1 : poll.total_votes
+    setPoll({ ...poll, my_vote: optionIdx, vote_counts: newCounts, total_votes: newTotal })
+
     setVoting(true)
     try {
       const result = await onVote(poll.id, optionIdx)
       setPoll((p) => p ? { ...p, ...result } : p)
     } catch {
-      // silent
+      setPoll(prev) // revert on failure
     } finally {
       setVoting(false)
     }

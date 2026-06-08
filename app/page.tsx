@@ -159,8 +159,11 @@ export default function TickFeedApp() {
 
   const handleBackFromArticle = () => {
     if (articleOpenedFromNotification.current) {
-      setHomeTabToFocus()
       articleOpenedFromNotification.current = false
+      // Only activate focus mode when landing directly on home, not on an
+      // intermediate screen like notifications (which would then mount Home
+      // in focus mode when its own back is pressed, triggering an error).
+      if (previousScreen === "home") setHomeTabToFocus()
     }
     setCurrentScreen(previousScreen)
     setPreviousScreen(preArticlePreviousScreen)
@@ -543,7 +546,7 @@ export default function TickFeedApp() {
         return (
           <NotificationsScreen
             token={token}
-            onBack={() => setCurrentScreen("home")}
+            onBack={() => { setCurrentScreen("home"); setActiveTab("home") }}
             onNavigateToArticle={handleNotificationNavigateToArticle}
             onNavigateToStock={handleNotificationNavigateToStock}
             onNavigateToCommunityPost={handleNotificationNavigateToCommunityPost}

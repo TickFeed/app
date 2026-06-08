@@ -118,6 +118,7 @@ export interface StockDetail {
   name: string
   sector: string | null
   industry: string | null
+  description: string | null
   related_news: Array<{
     id: number
     title: string

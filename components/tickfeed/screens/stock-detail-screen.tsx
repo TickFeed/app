@@ -197,6 +197,14 @@ export function StockDetailScreen({ token, symbol, onBack, onArticleClick, initi
             </span>
           </div>
 
+          {/* About */}
+          {stock.description && (
+            <div className="px-4 mt-4">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">About</p>
+              <p className="text-sm text-foreground/80 leading-relaxed">{stock.description}</p>
+            </div>
+          )}
+
           {/* What investors are asking */}
           <div className="px-4 mt-5">
             <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">

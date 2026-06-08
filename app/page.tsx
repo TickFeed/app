@@ -111,11 +111,13 @@ export default function TickFeedApp() {
     const token = authSession?.token
     if (!token) return
     sendHeartbeat(token)
-      .then(({ streakCount, isNewDay }) => {
+      .then(async ({ streakCount, isNewDay }) => {
         setStreakCount(streakCount)
         if (isNewDay) {
-          getTodayPoll(token).then(setTodayPoll).catch(() => {})
-          // Wait 350ms so any deep-link navigation has time to update currentScreen
+          // Fetch poll first so it's ready when the sheet opens
+          const poll = await getTodayPoll(token).catch(() => null)
+          setTodayPoll(poll)
+          // Wait 350ms so any deep-link navigation has settled into currentScreen
           setTimeout(() => {
             if (currentScreenRef.current === "home") {
               setShowCheckin(true)
@@ -521,9 +523,10 @@ export default function TickFeedApp() {
           <HomeScreen
             token={token}
             streakCount={streakCount}
-            onStreakBadgeClick={() => {
+            onStreakBadgeClick={async () => {
               if (todayPoll === null && authSession?.token) {
-                getTodayPoll(authSession.token).then(setTodayPoll).catch(() => {})
+                const poll = await getTodayPoll(authSession.token).catch(() => null)
+                setTodayPoll(poll)
               }
               setShowCheckin(true)
             }}

@@ -184,7 +184,7 @@ export default function TickFeedApp() {
 
   // Navigate from a notification to the right screen + tab
   const handleNotificationNavigateToArticle = async (newsId: number, tab?: string) => {
-    setCurrentScreen("home") // reset first
+    const origin = currentScreen  // preserve so back returns here
     try {
       const { getArticleDetail } = await import("@/lib/api")
       const detail = await getArticleDetail(token, newsId)
@@ -201,11 +201,12 @@ export default function TickFeedApp() {
       }
       setSelectedArticle(article)
       setArticleInitialTab(tab as "ai-summary" | "ai-chat" | "discussions" | undefined)
-      setPreviousScreen("home")
+      setPreArticlePreviousScreen(previousScreen)
+      setPreviousScreen(origin)
       articleOpenedFromNotification.current = true
       setCurrentScreen("article-detail")
     } catch {
-      // If fetch fails, just go home
+      // If fetch fails, stay on current screen
     }
   }
 
@@ -416,20 +417,28 @@ export default function TickFeedApp() {
   // Web Push (VAPID) — browser / PWA
   usePushNotifications(authSession ? token : null)
 
+  // Refs so push/SW handlers (registered once) always call the latest navigate functions
+  const notifNavArticleRef = useRef(handleNotificationNavigateToArticle)
+  useEffect(() => { notifNavArticleRef.current = handleNotificationNavigateToArticle })
+  const notifNavStockRef = useRef(handleNotificationNavigateToStock)
+  useEffect(() => { notifNavStockRef.current = handleNotificationNavigateToStock })
+  const notifNavCommunityRef = useRef(handleNotificationNavigateToCommunityPost)
+  useEffect(() => { notifNavCommunityRef.current = handleNotificationNavigateToCommunityPost })
+
   // Native push (FCM) — Capacitor Android
-  const handleNativePushTap = useCallback((data: { target_type?: string; target_id?: string; target_tab?: string; source_post_id?: string }) => {
+  const handleNativePushTap = (data: { target_type?: string; target_id?: string; target_tab?: string; source_post_id?: string }) => {
     const { target_type, target_id, target_tab, source_post_id } = data
     if (target_type === "article" && target_id) {
-      handleNotificationNavigateToArticle(Number(target_id), target_tab)
+      notifNavArticleRef.current(Number(target_id), target_tab)
     } else if (target_type === "stock" && target_id) {
-      handleNotificationNavigateToStock(target_id, target_tab)
+      notifNavStockRef.current(target_id, target_tab)
     } else if (source_post_id) {
-      handleNotificationNavigateToCommunityPost(Number(source_post_id))
+      notifNavCommunityRef.current(Number(source_post_id))
     } else {
       setActiveTab("home")
       setCurrentScreen("notifications")
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }
   useNativePush(authSession ? token : null, handleNativePushTap)
 
   // Android hardware/gesture back button
@@ -493,15 +502,14 @@ export default function TickFeedApp() {
         setCurrentScreen("community")
         setActiveTab("community")
       } else if (articleId) {
-        handleNotificationNavigateToArticle(Number(articleId), tab)
+        notifNavArticleRef.current(Number(articleId), tab)
       } else if (stockSym) {
-        handleNotificationNavigateToStock(stockSym, tab)
+        notifNavStockRef.current(stockSym, tab)
       }
     }
     navigator.serviceWorker.addEventListener("message", handler)
     return () => navigator.serviceWorker.removeEventListener("message", handler)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []) // refs are stable — safe to omit deps
 
   const renderScreen = () => {
     switch (currentScreen) {

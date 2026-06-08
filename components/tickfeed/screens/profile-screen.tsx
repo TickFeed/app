@@ -295,8 +295,8 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
         >
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 flex-shrink-0 border-2 border-primary/30">
-              {avatarStyle !== "initials" && user.username && (
-                <AvatarImage src={dicebearUrl(avatarStyle, user.username)} alt={initials} />
+              {avatarStyle !== "initials" && (
+                <AvatarImage src={dicebearUrl(avatarStyle, user.id)} alt={initials} />
               )}
               <AvatarFallback className="bg-primary text-xl font-bold text-primary-foreground">{initials}</AvatarFallback>
             </Avatar>
@@ -412,7 +412,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
               {following.map((u) => {
                 const name = u.first_name ? `${u.first_name}${u.last_name ? " " + u.last_name : ""}` : u.username ?? "User"
                 const initials = (u.first_name?.[0] ?? u.username?.[0] ?? "?").toUpperCase() + (u.last_name?.[0] ?? "").toUpperCase()
-                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" ? apiBearUrl(u.avatar_style, u.id) : ""
                 const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
                 const tier = alphaTier(score)
                 return (
@@ -526,7 +526,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
             const u = selectedUser
             const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username || "User"
             const ini = ((u.first_name?.[0] ?? u.username?.[0] ?? "?") + (u.last_name?.[0] ?? "")).toUpperCase()
-            const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+            const avatarSrc = u.avatar_style && u.avatar_style !== "initials" ? apiBearUrl(u.avatar_style, u.id) : ""
             const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
             const tier = alphaTier(score)
             const next = alphaNextTier(score)
@@ -930,8 +930,8 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
           {/* Avatar picker */}
           <div className="mb-5 flex flex-col items-center gap-3">
             <Avatar className="h-20 w-20 border-2 border-border">
-              {avatarStyle !== "initials" && user.username && (
-                <AvatarImage src={dicebearUrl(avatarStyle, user.username)} alt={initials} />
+              {avatarStyle !== "initials" && (
+                <AvatarImage src={dicebearUrl(avatarStyle, user.id)} alt={initials} />
               )}
               <AvatarFallback className="bg-primary text-2xl font-bold text-primary-foreground">{initials}</AvatarFallback>
             </Avatar>
@@ -996,7 +996,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
                           {style.id === "initials" ? (
                             <div className="flex h-full w-full items-center justify-center bg-primary text-xs font-bold text-primary-foreground">{initials}</div>
                           ) : (
-                            <img src={dicebearUrl(style.id, user.username)} alt={style.label} className="h-full w-full object-cover" />
+                            <img src={dicebearUrl(style.id, user.id)} alt={style.label} className="h-full w-full object-cover" />
                           )}
                         </div>
                         <span className={`text-xs ${avatarStyle === style.id ? "font-medium text-primary" : "text-muted-foreground"}`}>{style.label}</span>

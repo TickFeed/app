@@ -388,7 +388,7 @@ function PostCard({ post, myUserId, token, onLike, onComment, onFollow, onReply,
   const name = authorName(post)
   const time = formatRelativeTime(post.created_at)
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null)
-  const avatarSrc = dicebearUrl(post.avatar_style, post.username ?? "")
+  const avatarSrc = dicebearUrl(post.avatar_style, String(post.author_id))
   const [menuOpen, setMenuOpen] = useState(false)
 
   const handleShare = async () => {
@@ -1735,8 +1735,8 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
               {searchPeople.map((u) => {
                 const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username
                 const initials = ((u.first_name?.[0] ?? u.username?.[0] ?? "?") + (u.last_name?.[0] ?? "")).toUpperCase()
-                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username
-                  ? dicebearUrl(u.avatar_style, u.username)
+                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.id != null
+                  ? dicebearUrl(u.avatar_style, String(u.id))
                   : ""
                 return (
                   <button
@@ -1882,7 +1882,7 @@ export function CommunityScreen({ token, initialPostId, onUserClick }: Community
             const pInitials = profileUser.first_name
               ? (profileUser.first_name[0] + (profileUser.last_name?.[0] ?? "")).toUpperCase()
               : (profileUser.username ?? "?").slice(0, 2).toUpperCase()
-            const avatarSrc = dicebearUrl(profileUser.avatar_style, profileUser.username ?? "")
+            const avatarSrc = dicebearUrl(profileUser.avatar_style, String(profileUser.id))
             const score = calcAlphaScore(profileUser.posts_count, profileUser.likes_received, profileUser.followers_count)
             const tier = alphaTier(score)
             const next = alphaNextTier(score)

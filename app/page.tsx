@@ -466,6 +466,41 @@ export default function TickFeedApp() {
   }, [currentScreen, handleBackFromArticle, handleBackFromStock, handleBackFromAddStock])
   useAndroidBackButton(handleAndroidBack)
 
+  // Handle App Links (Android) — fires when the app is opened or resumed via an https://tickfeed.in URL.
+  // Uses refs so the listener registered once always calls the latest navigation functions.
+  const authSessionRef = useRef(authSession)
+  useEffect(() => { authSessionRef.current = authSession }, [authSession])
+  useEffect(() => {
+    let cleanup: (() => void) | undefined
+    const setup = async () => {
+      try {
+        const { App } = await import("@capacitor/app")
+        const handle = await App.addListener("appUrlOpen", (event) => {
+          if (!authSessionRef.current) return
+          try {
+            const url = new URL(event.url)
+            const params = url.searchParams
+            const postId = params.get("post")
+            const articleId = params.get("article")
+            const stockSym = params.get("stock")
+            const tab = params.get("tab") ?? undefined
+            if (postId) {
+              notifNavCommunityRef.current(Number(postId))
+            } else if (articleId) {
+              notifNavArticleRef.current(Number(articleId), tab)
+            } else if (stockSym) {
+              notifNavStockRef.current(stockSym, tab)
+            }
+          } catch { /* ignore malformed URLs */ }
+        })
+        cleanup = () => handle.remove()
+      } catch { /* not running in Capacitor */ }
+    }
+    setup()
+    return () => cleanup?.()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Handle notification deep-links: ?post=ID, ?article=ID&tab=TAB, ?stock=SYM&tab=TAB
   const deepLinkHandled = useRef(false)
   useEffect(() => {

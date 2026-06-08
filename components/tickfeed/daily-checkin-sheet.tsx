@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Flame, X } from "lucide-react"
 import type { DailyPoll } from "@/lib/api"
 
@@ -14,6 +14,9 @@ interface DailyCheckinSheetProps {
 export function DailyCheckinSheet({ streakCount, poll: initialPoll, onVote, onClose }: DailyCheckinSheetProps) {
   const [poll, setPoll] = useState(initialPoll)
   const [voting, setVoting] = useState(false)
+
+  // Sync when parent fetches the poll after the sheet is already open
+  useEffect(() => { setPoll(initialPoll) }, [initialPoll])
 
   const hasVoted = poll?.my_vote != null
   const total = poll?.total_votes ?? 0
@@ -88,13 +91,13 @@ export function DailyCheckinSheet({ streakCount, poll: initialPoll, onVote, onCl
                   <button
                     key={idx}
                     onClick={() => handleVote(idx)}
-                    disabled={hasVoted || voting}
-                    className={`relative w-full overflow-hidden rounded-xl border px-4 py-3 text-left transition-all
+                    disabled={voting}
+                    className={`relative w-full overflow-hidden rounded-xl border px-4 py-3 text-left transition-all active:scale-[0.98]
                       ${hasVoted
                         ? isMyVote
-                          ? "border-primary bg-primary/10"
-                          : "border-border bg-muted/30"
-                        : "border-border hover:border-primary/50 hover:bg-muted/40 active:scale-[0.98]"
+                          ? "border-primary bg-primary/10 hover:bg-primary/15"
+                          : "border-border bg-muted/30 hover:border-primary/40 hover:bg-muted/50"
+                        : "border-border hover:border-primary/50 hover:bg-muted/40"
                       }`}
                   >
                     {/* Result bar fills behind text after voting */}

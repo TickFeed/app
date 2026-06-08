@@ -512,9 +512,10 @@ export default function TickFeedApp() {
           <HomeScreen
             token={token}
             streakCount={streakCount}
-            onStreakBadgeClick={() => {
+            onStreakBadgeClick={async () => {
               if (todayPoll === null && authSession?.token) {
-                getTodayPoll(authSession.token).then(setTodayPoll).catch(() => {})
+                const poll = await getTodayPoll(authSession.token).catch(() => null)
+                setTodayPoll(poll)
               }
               setShowCheckin(true)
             }}

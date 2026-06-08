@@ -412,7 +412,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
               {following.map((u) => {
                 const name = u.first_name ? `${u.first_name}${u.last_name ? " " + u.last_name : ""}` : u.username ?? "User"
                 const initials = (u.first_name?.[0] ?? u.username?.[0] ?? "?").toUpperCase() + (u.last_name?.[0] ?? "").toUpperCase()
-                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+                const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(String(u.avatar_style), String(u.username)) : ""
                 const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
                 const tier = alphaTier(score)
                 return (
@@ -526,7 +526,7 @@ getFollowing(token).then(setFollowing).catch(() => setFollowing([]))
             const u = selectedUser
             const name = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username || "User"
             const ini = ((u.first_name?.[0] ?? u.username?.[0] ?? "?") + (u.last_name?.[0] ?? "")).toUpperCase()
-            const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(u.avatar_style, u.username) : ""
+            const avatarSrc = u.avatar_style && u.avatar_style !== "initials" && u.username ? apiBearUrl(String(u.avatar_style), String(u.username)) : ""
             const score = calcAlphaScore(u.posts_count, u.likes_received, u.followers_count)
             const tier = alphaTier(score)
             const next = alphaNextTier(score)

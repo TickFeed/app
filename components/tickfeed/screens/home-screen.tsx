@@ -30,6 +30,7 @@ const FEED_TTL_MS    = 5 * 60_000  // 5 minutes
 interface HomeScreenProps {
   token: string
   streakCount?: number
+  requestedTab?: number
   onStreakBadgeClick?: () => void
   onNewsClick?: (article: NewsArticle) => void
   onNotificationsClick?: () => void
@@ -46,6 +47,7 @@ const TABS = [
 const _CACHE_VER = 4
 let _persistedTab        = 0
 let _persistedFocusMode  = false
+let _showMyStocksCallout = false
 const _feedCache: Record<string, { items: NewsArticle[]; ts: number }> = {}
 const _digestCache: { data: MarketDigestResponse | null; ts: number } = { data: null, ts: 0 }
 
@@ -53,10 +55,15 @@ export function invalidateMyStocksCache() {
   delete _feedCache[`${_CACHE_VER}:1`]
 }
 
+export function showMyStocksOnboardingCallout() {
+  _showMyStocksCallout = true
+}
+
 export function setHomeTabToFocus() {
   _persistedTab       = 2
   _persistedFocusMode = true
 }
+
 
 function feedItemToArticle(item: FeedItem): NewsArticle {
   return {
@@ -74,9 +81,18 @@ function feedItemToArticle(item: FeedItem): NewsArticle {
   }
 }
 
-export function HomeScreen({ token, streakCount: streakCountProp = 0, onStreakBadgeClick, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
+export function HomeScreen({ token, streakCount: streakCountProp = 0, requestedTab, onStreakBadgeClick, onNewsClick, onNotificationsClick, onSearchClick }: HomeScreenProps) {
   const [activeTab,            setActiveTab]            = useState(_persistedTab)
   const [focusMode,            setFocusMode]            = useState(_persistedFocusMode)
+  const [myStocksCallout,      setMyStocksCallout]      = useState(_showMyStocksCallout)
+
+  useEffect(() => {
+    if (requestedTab != null) {
+      changeTab(requestedTab)
+      if (_showMyStocksCallout) setMyStocksCallout(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedTab])
 
   // Per-tab news state (both panels always rendered)
   const [tab0News,    setTab0News]    = useState<NewsArticle[]>(_feedCache[`${_CACHE_VER}:0`]?.items ?? [])
@@ -649,6 +665,66 @@ export function HomeScreen({ token, streakCount: streakCountProp = 0, onStreakBa
           </div>
         </div>
       </div>
+
+      {/* My Stocks onboarding popup — shown once after watchlist wizard */}
+      {myStocksCallout && createPortal((
+        <>
+          <div className="fixed inset-0 z-40 bg-black/60" onClick={() => { _showMyStocksCallout = false; setMyStocksCallout(false) }} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-5">
+            <div className="w-full max-w-sm rounded-2xl bg-background shadow-xl">
+              <div className="flex items-start justify-between px-5 pt-5 pb-3">
+                <div>
+                  <h2 className="text-lg font-bold text-foreground">Welcome to My Stocks</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">Everything here is personalised to you.</p>
+                </div>
+                <button
+                  onClick={() => { _showMyStocksCallout = false; setMyStocksCallout(false) }}
+                  className="rounded-full p-1.5 text-muted-foreground hover:bg-muted transition-colors -mt-0.5 -mr-1 shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="px-5 pb-4 space-y-2.5">
+                <div className="flex items-start gap-3 rounded-xl bg-muted/50 border border-border px-3.5 py-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <TrendingUp className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Your stock news</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Only articles about your watchlist stocks — no noise.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-xl bg-muted/50 border border-border px-3.5 py-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">NSE corporate events</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Earnings, dividends, AGMs &amp; board meetings for your stocks — shown at the top.</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-xl bg-muted/50 border border-border px-3.5 py-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+                    <Bell className="h-3.5 w-3.5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Market open &amp; close alerts</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Notified on trading days with top news for your stocks.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 pb-5">
+                <button
+                  onClick={() => { _showMyStocksCallout = false; setMyStocksCallout(false) }}
+                  className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground active:scale-[0.98] transition-transform"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      ), document.body)}
 
       {/* Event detail bottom sheet */}
       {selectedEvent && createPortal((

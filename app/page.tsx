@@ -6,7 +6,7 @@ import { useNativePush } from "@/lib/push-native"
 import { updateStatusBar } from "@/lib/native"
 import { useAndroidBackButton } from "@/lib/back-button"
 import { clearAnalyticsUser, logEvent, logScreenView, setAnalyticsUser } from "@/lib/analytics"
-import { HomeScreen, setHomeTabToFocus } from "@/components/tickfeed/screens/home-screen"
+import { HomeScreen, setHomeTabToFocus, invalidateMyStocksCache, showMyStocksOnboardingCallout } from "@/components/tickfeed/screens/home-screen"
 import { WatchlistScreen } from "@/components/tickfeed/screens/watchlist-screen"
 import { StockDetailScreen } from "@/components/tickfeed/screens/stock-detail-screen"
 import { AddStockScreen } from "@/components/tickfeed/screens/add-stock-screen"
@@ -19,6 +19,7 @@ import { SearchScreen } from "@/components/tickfeed/screens/search-screen"
 import { GlobalAIScreen } from "@/components/tickfeed/screens/global-ai-screen"
 import { BottomNav } from "@/components/tickfeed/bottom-nav"
 import { DailyCheckinSheet } from "@/components/tickfeed/daily-checkin-sheet"
+import { OnboardingWatchlistSheet } from "@/components/tickfeed/onboarding-watchlist-sheet"
 import {
   clearAuthSession,
   completeProfile,
@@ -34,7 +35,7 @@ import {
   type AuthUser,
   type NewUserProfile,
 } from "@/lib/auth"
-import { getUserPublicProfile, getTodayPoll, sendHeartbeat, castPollVote, type PublicUserProfile, type DailyPoll } from "@/lib/api"
+import { getUserPublicProfile, getTodayPoll, sendHeartbeat, castPollVote, getWatchlist, type PublicUserProfile, type DailyPoll } from "@/lib/api"
 import { toast } from "@/hooks/use-toast"
 
 export type Screen = "home" | "watchlist" | "stock-detail" | "add-stock" | "community" | "profile" | "article-detail" | "notifications" | "search" | "ai"
@@ -89,6 +90,8 @@ export default function TickFeedApp() {
   const [streakCount,      setStreakCount]      = useState(0)
   const [showCheckin,      setShowCheckin]      = useState(false)
   const [todayPoll,        setTodayPoll]        = useState<DailyPoll | null>(null)
+  const [showOnboarding,   setShowOnboarding]   = useState(false)
+  const [homeRequestedTab, setHomeRequestedTab] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     pruneStaleStorage()
@@ -260,6 +263,13 @@ export default function TickFeedApp() {
     setRegistrationToken(null)
     resetShell()
     logEvent("login", { method: session.user.email ? "email" : "google" })
+
+    // Show onboarding wizard if watchlist is empty and not previously dismissed
+    if (!localStorage.getItem("onboarding_watchlist_done")) {
+      getWatchlist(session.token).then(wl => {
+        if (wl.length === 0) setShowOnboarding(true)
+      }).catch(() => {})
+    }
   }
 
   const handleGoogleSuccess = async (token: string, tokenType: 'access_token' | 'id_token') => {
@@ -558,6 +568,7 @@ export default function TickFeedApp() {
           <HomeScreen
             token={token}
             streakCount={streakCount}
+            requestedTab={homeRequestedTab}
             onStreakBadgeClick={async () => {
               if (todayPoll === null && authSession?.token) {
                 const poll = await getTodayPoll(authSession.token).catch(() => null)
@@ -691,6 +702,18 @@ export default function TickFeedApp() {
     <div className="flex h-[100dvh] flex-col bg-background safe-area-pt">
       <div className="flex-1 overflow-hidden">{renderScreen()}</div>
       {showBottomNav ? <BottomNav activeTab={activeTab} onTabChange={handleTabChange} /> : null}
+      {showOnboarding && authSession?.token && (
+        <OnboardingWatchlistSheet
+          token={authSession.token}
+          onDone={(added) => {
+            localStorage.setItem("onboarding_watchlist_done", "1")
+            setShowOnboarding(false)
+            if (added) invalidateMyStocksCache()
+            showMyStocksOnboardingCallout()
+            setHomeRequestedTab(1)
+          }}
+        />
+      )}
       {showCheckin && authSession?.token && (
         <DailyCheckinSheet
           streakCount={streakCount}

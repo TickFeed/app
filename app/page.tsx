@@ -695,7 +695,11 @@ export default function TickFeedApp() {
         <DailyCheckinSheet
           streakCount={streakCount}
           poll={todayPoll}
-          onVote={(pollId, optionIdx) => castPollVote(authSession.token, pollId, optionIdx)}
+          onVote={async (pollId, optionIdx) => {
+            const result = await castPollVote(authSession.token, pollId, optionIdx)
+            setTodayPoll(prev => prev ? { ...prev, ...result } : prev)
+            return result
+          }}
           onClose={() => setShowCheckin(false)}
         />
       )}

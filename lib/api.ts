@@ -39,6 +39,7 @@ async function apiDelete<T>(path: string, token: string): Promise<T> {
     const err = await res.json().catch(() => ({}))
     throw new Error((err as { detail?: string }).detail || `HTTP ${res.status}`)
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
 }
 

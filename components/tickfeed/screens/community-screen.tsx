@@ -907,12 +907,16 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
   const bottomRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const deletedIdsRef = useRef(new Set<number>())
+  const commentsRef = useRef<CommunityPost[]>([])
+  useEffect(() => { commentsRef.current = comments }, [comments])
 
   useEffect(() => {
     getPostComments(token, post.id)
       .then((c) => {
-        setComments(c.filter((x) => !deletedIdsRef.current.has(x.id)))
-        setServerCount(c.filter((x) => !deletedIdsRef.current.has(x.id)).length)
+        const visible = c.filter((x) => !deletedIdsRef.current.has(x.id))
+        commentsRef.current = visible
+        setComments(visible)
+        setServerCount(visible.length)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -930,6 +934,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
       getPostComments(token, post.id)
         .then((fresh) => {
           const visible = fresh.filter((x) => !deletedIdsRef.current.has(x.id))
+          commentsRef.current = visible
           setComments(visible)
           setServerCount(visible.length)
           const botReplied = fresh.some((c) => c.is_bot)
@@ -1122,27 +1127,34 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
   const noop = () => {}
 
   const handleReplyDelete = useCallback(async (target: CommunityPost) => {
-    // Collect the target and all its descendants from local state
-    const collectDescendants = (id: number, all: CommunityPost[]): number[] => {
-      const children = all.filter((c) => c.reply_to_id === id)
-      return [id, ...children.flatMap((c) => collectDescendants(c.id, all))]
+    // Compute descendants synchronously from commentsRef so we can update
+    // deletedIdsRef BEFORE any async work — if a refresh fires between
+    // the state update and the DELETE completing, it will see these IDs
+    // and filter them out rather than restoring the deleted comment.
+    const all = commentsRef.current
+    const allIds = new Set<number>()
+    const collect = (id: number) => {
+      allIds.add(id)
+      all.filter((c) => c.reply_to_id === id).forEach((c) => collect(c.id))
     }
-    let removedIds: number[] = []
-    let removedComments: CommunityPost[] = []
-    setComments((prev) => {
-      removedIds = collectDescendants(target.id, prev)
-      removedComments = prev.filter((c) => removedIds.includes(c.id))
-      removedIds.forEach((id) => deletedIdsRef.current.add(id))
-      return prev.filter((c) => !removedIds.includes(c.id))
-    })
-    setServerCount((n) => Math.max(0, n - removedIds.length))
+    collect(target.id)
+    const removedComments = all.filter((c) => allIds.has(c.id))
+
+    allIds.forEach((id) => deletedIdsRef.current.add(id))
+    const next = all.filter((c) => !allIds.has(c.id))
+    commentsRef.current = next
+    setComments(next)
+    setServerCount((n) => Math.max(0, n - removedComments.length))
+
     try {
       await deletePost(token, target.id)
       toast({ title: "Reply deleted" })
     } catch {
-      removedIds.forEach((id) => deletedIdsRef.current.delete(id))
-      setComments((prev) => [...prev, ...removedComments].sort((a, b) => a.id - b.id))
-      setServerCount((n) => n + removedIds.length)
+      allIds.forEach((id) => deletedIdsRef.current.delete(id))
+      const restored = [...next, ...removedComments].sort((a, b) => a.id - b.id)
+      commentsRef.current = restored
+      setComments(restored)
+      setServerCount((n) => n + removedComments.length)
       toast({ title: "Could not delete reply", description: "Please try again." })
     }
   }, [token])

@@ -906,12 +906,13 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const deletedIdsRef = useRef(new Set<number>())
 
   useEffect(() => {
     getPostComments(token, post.id)
       .then((c) => {
-        setComments(c)
-        setServerCount(c.length)
+        setComments(c.filter((x) => !deletedIdsRef.current.has(x.id)))
+        setServerCount(c.filter((x) => !deletedIdsRef.current.has(x.id)).length)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -928,8 +929,9 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
     const refresh = () => {
       getPostComments(token, post.id)
         .then((fresh) => {
-          setComments(fresh)
-          setServerCount(fresh.length)
+          const visible = fresh.filter((x) => !deletedIdsRef.current.has(x.id))
+          setComments(visible)
+          setServerCount(visible.length)
           const botReplied = fresh.some((c) => c.is_bot)
           if (botReplied && !settled) {
             settled = true
@@ -1120,14 +1122,27 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
   const noop = () => {}
 
   const handleReplyDelete = useCallback(async (target: CommunityPost) => {
-    setComments((prev) => prev.filter((c) => c.id !== target.id))
-    setServerCount((n) => Math.max(0, n - 1))
+    // Collect the target and all its descendants from local state
+    const collectDescendants = (id: number, all: CommunityPost[]): number[] => {
+      const children = all.filter((c) => c.reply_to_id === id)
+      return [id, ...children.flatMap((c) => collectDescendants(c.id, all))]
+    }
+    let removedIds: number[] = []
+    let removedComments: CommunityPost[] = []
+    setComments((prev) => {
+      removedIds = collectDescendants(target.id, prev)
+      removedComments = prev.filter((c) => removedIds.includes(c.id))
+      removedIds.forEach((id) => deletedIdsRef.current.add(id))
+      return prev.filter((c) => !removedIds.includes(c.id))
+    })
+    setServerCount((n) => Math.max(0, n - removedIds.length))
     try {
       await deletePost(token, target.id)
       toast({ title: "Reply deleted" })
     } catch {
-      setComments((prev) => [...prev, target].sort((a, b) => a.id - b.id))
-      setServerCount((n) => n + 1)
+      removedIds.forEach((id) => deletedIdsRef.current.delete(id))
+      setComments((prev) => [...prev, ...removedComments].sort((a, b) => a.id - b.id))
+      setServerCount((n) => n + removedIds.length)
       toast({ title: "Could not delete reply", description: "Please try again." })
     }
   }, [token])

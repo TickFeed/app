@@ -892,6 +892,9 @@ interface CommentsSheetProps {
 export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPending = false, onUserClick }: CommentsSheetProps) {
   const [rootPost, setRootPost] = useState(post)
   const [comments, setComments] = useState<CommunityPost[]>([])
+  // serverCount tracks the direct-reply count (matching DB comments_count).
+  // Initialized from the known feed count so closing early never resets it to 0.
+  const [serverCount, setServerCount] = useState(post.comments_count)
   const [loading, setLoading] = useState(true)
   const [commentText, setCommentText] = useState("")
   const [posting, setPosting] = useState(false)
@@ -906,7 +909,10 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
 
   useEffect(() => {
     getPostComments(token, post.id)
-      .then(setComments)
+      .then((c) => {
+        setComments(c)
+        setServerCount(c.length)
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [post.id, token])
@@ -923,6 +929,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
       getPostComments(token, post.id)
         .then((fresh) => {
           setComments(fresh)
+          setServerCount(fresh.length)
           const botReplied = fresh.some((c) => c.is_bot)
           if (botReplied && !settled) {
             settled = true
@@ -1058,6 +1065,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
       if (res.ok) {
         const reply: CommunityPost = await res.json()
         setComments((prev) => [...prev, reply])
+        setServerCount((n) => n + 1)
         setCommentText("")
         setReplyingTo(null)
         setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50)
@@ -1113,11 +1121,13 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
 
   const handleReplyDelete = useCallback(async (target: CommunityPost) => {
     setComments((prev) => prev.filter((c) => c.id !== target.id))
+    setServerCount((n) => Math.max(0, n - 1))
     try {
       await deletePost(token, target.id)
       toast({ title: "Reply deleted" })
     } catch {
       setComments((prev) => [...prev, target].sort((a, b) => a.id - b.id))
+      setServerCount((n) => n + 1)
       toast({ title: "Could not delete reply", description: "Please try again." })
     }
   }, [token])
@@ -1155,7 +1165,7 @@ export function CommentsSheet({ post, token, myUserId, onClose, initialTickrPend
       {/* ── Sticky header ── */}
       <div className="shrink-0 flex items-center gap-3 px-4 py-3 border-b border-border bg-background">
         <button
-          onClick={() => onClose(comments.length)}
+          onClick={() => onClose(serverCount)}
           className="rounded-full p-1.5 text-foreground hover:bg-muted transition-colors"
         >
           <ChevronLeft className="h-5 w-5" />

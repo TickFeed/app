@@ -225,7 +225,7 @@ export default function TickFeedApp() {
     setCurrentScreen("stock-detail")
   }
 
-  const handleNotificationNavigateToCommunityPost = async (postId: number) => {
+  const handleNotificationNavigateToCommunityPost = async (postId: number, notificationId?: number) => {
     try {
       const { getPostById } = await import("@/lib/api")
       // Walk reply_to_id chain to find the root post (max 10 hops as safety limit)
@@ -236,12 +236,23 @@ export default function TickFeedApp() {
         depth++
       }
       setInitialCommunityPostId(post.id)
-    } catch {
-      // If fetch fails, try navigating with the original ID anyway
-      setInitialCommunityPostId(postId)
+      setCurrentScreen("community")
+      setActiveTab("community")
+    } catch (err) {
+      const isGone = err instanceof Error && err.message === "Post not found"
+      if (isGone) {
+        if (notificationId) {
+          const { markNotificationsRead } = await import("@/lib/api")
+          markNotificationsRead(token, [notificationId]).catch(() => {})
+        }
+        toast({ title: "Post no longer available", description: "This content has been deleted." })
+      } else {
+        // Transient network error — navigate anyway so the user isn't stuck
+        setInitialCommunityPostId(postId)
+        setCurrentScreen("community")
+        setActiveTab("community")
+      }
     }
-    setCurrentScreen("community")
-    setActiveTab("community")
   }
 
   const handleAddStockScreen = () => {
@@ -441,14 +452,14 @@ export default function TickFeedApp() {
   useEffect(() => { notifNavCommunityRef.current = handleNotificationNavigateToCommunityPost })
 
   // Native push (FCM) — Capacitor Android
-  const handleNativePushTap = (data: { target_type?: string; target_id?: string; target_tab?: string; source_post_id?: string }) => {
-    const { target_type, target_id, target_tab, source_post_id } = data
+  const handleNativePushTap = (data: { target_type?: string; target_id?: string; target_tab?: string; source_post_id?: string; notification_id?: string }) => {
+    const { target_type, target_id, target_tab, source_post_id, notification_id } = data
     if (target_type === "article" && target_id) {
       notifNavArticleRef.current(Number(target_id), target_tab)
     } else if (target_type === "stock" && target_id) {
       notifNavStockRef.current(target_id, target_tab)
     } else if (source_post_id) {
-      notifNavCommunityRef.current(Number(source_post_id))
+      notifNavCommunityRef.current(Number(source_post_id), notification_id ? Number(notification_id) : undefined)
     } else {
       setActiveTab("home")
       setCurrentScreen("notifications")

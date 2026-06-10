@@ -15,7 +15,7 @@ interface NotificationsScreenProps {
   onBack: () => void
   onNavigateToArticle: (newsId: number, tab?: string) => void
   onNavigateToStock: (symbol: string, tab?: string) => void
-  onNavigateToCommunityPost: (postId: number) => void
+  onNavigateToCommunityPost: (postId: number, notificationId?: number) => void
 }
 
 function NotifIcon({ type }: { type: AppNotification["type"] }) {
@@ -78,7 +78,7 @@ export function NotificationsScreen({
       const postId =
         n.source_post_id ??
         (n.target_type === "community" && n.target_id ? parseInt(n.target_id, 10) : null)
-      if (postId) onNavigateToCommunityPost(postId)
+      if (postId) onNavigateToCommunityPost(postId, n.id)
     }
   }
 

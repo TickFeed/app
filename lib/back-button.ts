@@ -21,7 +21,13 @@ export function useAndroidBackButton(onBack: () => boolean) {
       try {
         const { App } = await import("@capacitor/app")
         const handle = await App.addListener("backButton", () => {
-          const handled = onBackRef.current()
+          let handled = false
+          try {
+            handled = onBackRef.current()
+          } catch (err) {
+            console.warn("[back-button] handler threw:", err)
+            handled = true // don't exit the app on handler errors
+          }
           if (!handled) App.exitApp()
         })
         removeListener = () => handle.remove()

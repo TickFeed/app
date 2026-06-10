@@ -29,6 +29,7 @@ export function useNativePush(
     if (!token || registeredRef.current || !isNative()) return
 
     let PushNotificationsModule: typeof import("@capacitor/push-notifications")["PushNotifications"] | null = null
+    let LocalNotificationsModule: typeof import("@capacitor/local-notifications")["LocalNotifications"] | null = null
 
     async function setup() {
       try {
@@ -60,35 +61,48 @@ export function useNativePush(
           console.warn("[native-push] registration error:", err)
         })
 
+        // Register the local notification tap listener ONCE here (not inside pushNotificationReceived,
+        // which would accumulate a new listener for every foreground notification received).
+        try {
+          const localMod = await import("@capacitor/local-notifications")
+          LocalNotificationsModule = localMod.LocalNotifications
+          await LocalNotificationsModule.requestPermissions()
+          await LocalNotificationsModule.createChannel({
+            id: "tickfeed_default",
+            name: "TickFeed Notifications",
+            importance: 4,
+            vibration: true,
+            sound: "default",
+          })
+          await LocalNotificationsModule.addListener("localNotificationActionPerformed", ({ notification: ln }) => {
+            try { onTapRef.current((ln.extra ?? {}) as PushNotificationData) } catch {}
+          })
+        } catch {
+          // LocalNotifications not available — taps handled via pushNotificationActionPerformed only
+        }
+
         await PushNotificationsModule.addListener("pushNotificationReceived", async ({ notification }) => {
           // Android suppresses FCM data-only messages when the app is in the foreground.
           // Show a local heads-up notification so it pops on screen.
-          try {
-            const { LocalNotifications } = await import("@capacitor/local-notifications")
-            await LocalNotifications.requestPermissions()
-            await LocalNotifications.createChannel({
-              id: "tickfeed_default",
-              name: "TickFeed Notifications",
-              importance: 4,
-              vibration: true,
-              sound: "default",
-            })
-            await LocalNotifications.addListener("localNotificationActionPerformed", ({ notification: ln }) => {
-              try { onTapRef.current((ln.extra ?? {}) as PushNotificationData) } catch {}
-            })
-            await LocalNotifications.schedule({
-              notifications: [{
-                id: Date.now(),
-                title: notification.title ?? "TickFeed",
-                body: notification.body ?? "",
-                channelId: "tickfeed_default",
-                smallIcon: "ic_stat_notification",
-                iconColor: "#22c55e",
-                extra: notification.data ?? {},
-              }],
-            })
-          } catch {
-            // LocalNotifications not available — fall back to silent in-app routing
+          if (LocalNotificationsModule) {
+            try {
+              await LocalNotificationsModule.schedule({
+                notifications: [{
+                  id: Date.now(),
+                  title: notification.title ?? "TickFeed",
+                  body: notification.body ?? "",
+                  channelId: "tickfeed_default",
+                  smallIcon: "ic_stat_notification",
+                  iconColor: "#22c55e",
+                  extra: notification.data ?? {},
+                }],
+              })
+            } catch {
+              // Schedule failed — fall back to silent in-app routing
+              try { onTapRef.current((notification.data ?? {}) as PushNotificationData) } catch {}
+            }
+          } else {
+            // LocalNotifications not available — route in-app silently
             try { onTapRef.current((notification.data ?? {}) as PushNotificationData) } catch {}
           }
         })
@@ -111,6 +125,7 @@ export function useNativePush(
 
     return () => {
       PushNotificationsModule?.removeAllListeners().catch(() => {})
+      LocalNotificationsModule?.removeAllListeners().catch(() => {})
       registeredRef.current = false
     }
   }, [token])

@@ -219,9 +219,9 @@ export default function TickFeedApp() {
   }
 
   const handleNotificationNavigateToStock = (symbol: string, tab?: string) => {
+    setPreviousScreen(currentScreen)
     setSelectedStock(symbol)
     setStockInitialTab(tab as "overview" | "ai-chat" | "discuss" | undefined)
-    setPreviousScreen("notifications")
     setCurrentScreen("stock-detail")
   }
 

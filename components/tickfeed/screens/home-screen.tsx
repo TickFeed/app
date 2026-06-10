@@ -464,6 +464,7 @@ export function HomeScreen({ token, streakCount: streakCountProp = 0, requestedT
                 headline={digestHeadline}
                 brief={digestBrief}
                 dateLabel={digestDate}
+                topStorySentiment={digest?.top_story?.sentiment}
                 indexDigests={indexDigests}
               />
             </div>

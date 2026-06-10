@@ -63,6 +63,7 @@ export interface FeedItem {
 export interface IndexDigest {
   headline: string
   brief: string
+  sentiment?: string | null
 }
 
 export interface MarketDigestResponse {

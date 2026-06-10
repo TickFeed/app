@@ -1,22 +1,35 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { TrendingUp, TrendingDown } from "lucide-react"
+import { TrendingUp, TrendingDown, Info, X } from "lucide-react"
 
 interface IndexDigest {
   headline: string
   brief: string
 }
 
+interface IndexDigest {
+  headline: string
+  brief: string
+  sentiment?: string | null
+}
+
 interface MarketDigestProps {
   headline?: string | null
   brief?: string | null
   dateLabel?: string | null
+  topStorySentiment?: string | null
   indexDigests?: { nifty50?: IndexDigest; sensex?: IndexDigest; banknifty?: IndexDigest }
 }
 
 const INDEX_LABELS = ["Nifty 50", "Sensex", "Bank Nifty"]
 const INDEX_KEYS = ["nifty50", "sensex", "banknifty"] as const
+
+function sentimentToTrend(sentiment: string | null | undefined): boolean | null {
+  if (sentiment === "BULLISH") return true
+  if (sentiment === "BEARISH") return false
+  return null
+}
 
 function detectTrend(text: string | null | undefined): boolean | null {
   if (!text) return null
@@ -26,7 +39,7 @@ function detectTrend(text: string | null | undefined): boolean | null {
   const p = pos.filter(w => lower.includes(w)).length
   const n = neg.filter(w => lower.includes(w)).length
   if (p === 0 && n === 0) return null
-  return p >= n
+  return p > n  // strict majority required; ties → null (neutral)
 }
 
 function SentimentSparkline({ trend }: { trend: boolean | null }) {
@@ -68,8 +81,9 @@ function SentimentSparkline({ trend }: { trend: boolean | null }) {
   )
 }
 
-export function MarketDigest({ headline, brief, dateLabel, indexDigests }: MarketDigestProps) {
+export function MarketDigest({ headline, brief, dateLabel, topStorySentiment, indexDigests }: MarketDigestProps) {
   const [active, setActive] = useState(0)
+  const [showInfo, setShowInfo] = useState(false)
   const touchStartX = useRef(0)
 
   // Always render all 3 index cards (hidden ones keep the card height stable)
@@ -79,6 +93,8 @@ export function MarketDigest({ headline, brief, dateLabel, indexDigests }: Marke
       label: INDEX_LABELS[i],
       headline: digest?.headline ?? (i === 0 ? headline : null),
       brief: digest?.brief ?? (i === 0 ? brief : null),
+      // Use AI sentiment when available; fall back to text heuristic
+      sentiment: digest?.sentiment ?? (i === 0 ? topStorySentiment : null),
     }
   })
 
@@ -97,7 +113,7 @@ export function MarketDigest({ headline, brief, dateLabel, indexDigests }: Marke
 
   return (
     <div
-      className="w-full rounded-2xl bg-card border border-border px-4 py-4 select-none"
+      className="relative w-full rounded-2xl bg-card border border-border px-4 py-4 select-none"
       style={{ touchAction: "pan-y" }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -130,7 +146,7 @@ export function MarketDigest({ headline, brief, dateLabel, indexDigests }: Marke
       {/* Cards — all occupy the same grid cell; inactive are hidden to prevent layout shift */}
       <div className="grid">
         {displayCards.map((card, idx) => {
-          const trend = detectTrend(card.headline) ?? detectTrend(card.brief)
+          const trend = sentimentToTrend(card.sentiment) ?? detectTrend(card.headline) ?? detectTrend(card.brief)
           return (
             <div
               key={card.label}
@@ -163,6 +179,39 @@ export function MarketDigest({ headline, brief, dateLabel, indexDigests }: Marke
           )
         })}
       </div>
+
+      {/* Info icon */}
+      <div className="flex justify-end mt-2">
+        <button
+          onClick={() => setShowInfo(true)}
+          className="text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+          aria-label="About this card"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      {/* Info overlay */}
+      {showInfo && (
+        <div
+          className="absolute inset-0 rounded-2xl bg-card/95 backdrop-blur-sm flex flex-col justify-center px-5 py-5 z-10"
+          onClick={() => setShowInfo(false)}
+        >
+          <button
+            className="absolute top-3 right-3 text-muted-foreground/60 hover:text-foreground"
+            onClick={() => setShowInfo(false)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <p className="text-[13px] font-semibold text-foreground mb-2">About Market Digest</p>
+          <p className="text-[12px] text-muted-foreground leading-relaxed mb-3">
+            AI-generated headlines and briefs based on the latest high-priority market news and live index levels. Refreshed throughout the trading day.
+          </p>
+          <p className="text-[11px] text-muted-foreground/70 leading-relaxed border-t border-border/40 pt-3">
+            <span className="font-medium text-muted-foreground">The graph shows market sentiment</span> — not actual price movement. Green indicates bullish signals; red indicates bearish signals based on AI analysis.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

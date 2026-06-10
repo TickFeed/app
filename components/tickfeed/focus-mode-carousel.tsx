@@ -212,7 +212,7 @@ export function FocusModeCarousel({ articles, loading, loadingMore, hasMore, onA
       )}
 
       {/* ── Card stack ─────────────────────────────────────────────────── */}
-      {!isDone && !loading && (
+      {!isDone && !loading && card0 && (
         <div className="absolute inset-0">
           {/* Back card */}
           {card2 && (

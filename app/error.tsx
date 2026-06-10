@@ -13,6 +13,11 @@ export default function GlobalError({
     console.error("[error-boundary]", error)
   }, [error])
 
+  const handleRetry = () => {
+    reset()
+    window.location.replace("/")
+  }
+
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background p-8 text-center">
       <p className="text-lg font-semibold text-foreground">Something went wrong</p>
@@ -20,7 +25,7 @@ export default function GlobalError({
         A connection problem may have occurred. Please try again.
       </p>
       <button
-        onClick={reset}
+        onClick={handleRetry}
         className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground"
       >
         Try again
